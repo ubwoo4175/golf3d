@@ -1,24 +1,33 @@
 /**
  * The swing path: an editable keyframe track of (torso angle, hand u, hand v)
- * against normalised swing time t in [0, 1].
+ * against normalised swing time t in [0, 1]. The hand's perpendicular distance
+ * from the rectangle is not authored -- it is solved from the arm rules, see
+ * `axisDistanceFor` in kinematics.js.
  *
- * The reference values approximate Rory McIlroy's sequencing -- a wide, low
- * takeaway, ~93 degrees of shoulder turn at the top, a deep transition where
- * the hands drop while the torso is already unwinding, and a long extension
- * through impact. They are hand-authored from published swing positions, not
- * motion capture, so treat them as a well-shaped starting point that you tune
- * by dragging.
+ * The reference values approximate Rory McIlroy's sequencing -- ~93 degrees of
+ * shoulder turn at the top, a deep transition where the hands drop while the
+ * torso is already unwinding, and long extension through impact. They are
+ * hand-authored from published swing positions, not motion capture, so treat
+ * them as a well-shaped starting point that you tune by dragging.
  *
- * The keyframes honour the elbow rules by construction:
- *   backswing + downswing  lead hand distance stays ~REACH (lead elbow locked),
- *                          so all of the folding happens at the trail elbow
- *   through impact          the trail elbow is still extending, not yet straight
- *   follow-through          the lead elbow folds, the trail elbow stays extended
+ * THE ARM RULES
+ *   t <= RELEASE_T   the lead arm is straight (all folding is at the trail elbow)
+ *   t >= RELEASE_T   the trail arm is straight (the lead elbow folds)
+ *   t == RELEASE_T   both are straight, which forces u = 0 there
+ *
+ * Impact is NOT where the trail arm straightens -- it is still extending through
+ * impact and only reaches full length at release.
+ *
+ * THE PATH SHAPE
+ *   backswing        convex upward: bows ABOVE the chord from address to the top
+ *   downswing        convex downward, and so drops below the backswing -- the
+ *                    shallowing loop
+ *   follow-through   convex downward
  */
 
 import { rad } from './vec3.js';
-import { TIMING, PLANE, REACH } from './config.js';
-import { solvePose, SHOULDER_UV } from './kinematics.js';
+import { TIMING } from './config.js';
+import { solvePose } from './kinematics.js';
 
 export const PHASES = [
   { id: 'backswing', label: 'Backswing', start: 0, end: 0.55 },
@@ -30,51 +39,37 @@ export const phaseAt = (t) =>
   PHASES.find((p) => t <= p.end) ?? PHASES[PHASES.length - 1];
 
 /**
- * How extended the lead arm is while it is "locked". Not 1.0: a real lead arm
- * keeps a few degrees of flex, and full extension would sit exactly on the
- * reach boundary where interpolation between keyframes tips out of range.
+ * Release (P8): where the straight-arm constraint hands over from the lead arm
+ * to the trail arm. Deliberately later than impact (t = 0.76).
  */
-export const LEAD_LOCK_RATIO = 0.99;
+export const RELEASE_T = 0.82;
+
+/** Which arm is held straight at time t. */
+export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
 
 /**
- * The `v` that places the hand on the lead arm's locked-extension circle for a
- * given `u`. Deriving `v` rather than typing it is what guarantees the authored
- * backswing and downswing actually obey "lead elbow straight, trail elbow does
- * all the folding". The lower intersection is taken, i.e. hands below the
- * shoulder line.
+ * t, torso angle (deg, + = away from target), hand u, hand v, label.
+ *
+ * u is <= 0 up to release and >= 0 after, hitting exactly 0 at release. That is
+ * not a stylistic choice -- `freeArmULimit` shows the rules permit nothing else,
+ * because the free arm would have to be longer than it is.
  */
-export function lockedLeadV(u, ratio = LEAD_LOCK_RATIO) {
-  const target = ratio * REACH;
-  const du = u - SHOULDER_UV.lead.u;
-  const r2 = target * target - PLANE.offset * PLANE.offset - du * du;
-  return -Math.sqrt(Math.max(0, r2));
-}
-
-/** Address through impact: lead elbow locked, so only (t, torso turn, u) is authored. */
-const LEAD_LOCKED = [
-  { t: 0.0, thetaDeg: 0, u: 0.0, label: 'Address (P1)' },
-  { t: 0.13, thetaDeg: 15, u: -0.055, label: 'Takeaway (P2)' },
-  { t: 0.27, thetaDeg: 40, u: -0.15, label: 'Lead arm horizontal (P3)' },
-  { t: 0.42, thetaDeg: 70, u: -0.28, label: 'Shaft parallel (P4)' },
-  { t: 0.55, thetaDeg: 93, u: -0.375, label: 'Top of backswing (P5)' },
-  { t: 0.62, thetaDeg: 66, u: -0.345, label: 'Transition' },
-  { t: 0.68, thetaDeg: 26, u: -0.255, label: 'Delivery (P6)' },
-  { t: 0.72, thetaDeg: -8, u: -0.14, label: 'Pre-impact' },
-  // Slightly trail-side of centre so the trail elbow still has flex left to
-  // give: impact happens while it is extending, not after it has straightened.
-  { t: 0.76, thetaDeg: -38, u: -0.01, label: 'Impact (P7)' },
-];
-
-/** Follow-through: the lead elbow folds, so `v` is authored directly. */
-const LEAD_FOLDING = [
-  { t: 0.82, thetaDeg: -60, u: 0.12, v: -0.47, label: 'Release (P8)' },
-  { t: 0.9, thetaDeg: -80, u: 0.215, v: -0.33, label: 'Trail arm extended (P9)' },
-  { t: 1.0, thetaDeg: -95, u: 0.3, v: 0.03, label: 'Finish (P10)' },
-];
-
 export const REFERENCE_KEYFRAMES = [
-  ...LEAD_LOCKED.map((k) => ({ ...k, v: lockedLeadV(k.u) })),
-  ...LEAD_FOLDING,
+  // Backswing -- convex upward, so the hands rise early and the arc flattens.
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.55, label: 'Address (P1)' },
+  { t: 0.13, thetaDeg: 15, u: -0.075, v: -0.435, label: 'Takeaway (P2)' },
+  { t: 0.27, thetaDeg: 40, u: -0.18, v: -0.29, label: 'Lead arm horizontal (P3)' },
+  { t: 0.42, thetaDeg: 70, u: -0.29, v: -0.17, label: 'Shaft parallel (P4)' },
+  { t: 0.55, thetaDeg: 93, u: -0.375, v: -0.1, label: 'Top of backswing (P5)' },
+  // Downswing -- convex downward, tracking under the backswing.
+  { t: 0.62, thetaDeg: 66, u: -0.36, v: -0.23, label: 'Transition' },
+  { t: 0.68, thetaDeg: 26, u: -0.29, v: -0.39, label: 'Delivery (P6)' },
+  { t: 0.76, thetaDeg: -38, u: -0.06, v: -0.52, label: 'Impact (P7)' },
+  // Release: the handover. Both arms straight, so u must be 0.
+  { t: RELEASE_T, thetaDeg: -60, u: 0.0, v: -0.48, label: 'Release (P8)' },
+  // Follow-through -- convex downward.
+  { t: 0.9, thetaDeg: -80, u: 0.19, v: -0.33, label: 'Trail arm extended (P9)' },
+  { t: 1.0, thetaDeg: -95, u: 0.3, v: 0.05, label: 'Finish (P10)' },
 ];
 
 /**
@@ -111,13 +106,12 @@ function hermite(keys, i, localT, span, get) {
  */
 export class SwingPath {
   constructor(keyframes = REFERENCE_KEYFRAMES) {
-    this.reset(keyframes);
     this.listeners = new Set();
+    this.reset(keyframes);
   }
 
   reset(keyframes = REFERENCE_KEYFRAMES) {
     this.keys = keyframes.map((k) => ({ ...k }));
-    this.cache = null;
     this.emit();
   }
 
@@ -128,7 +122,7 @@ export class SwingPath {
 
   emit() {
     this.cache = null;
-    this.listeners?.forEach((fn) => fn(this));
+    this.listeners.forEach((fn) => fn(this));
   }
 
   /** Move one keyframe's hand position. Time and torso angle are untouched. */
@@ -167,6 +161,7 @@ export class SwingPath {
       thetaDeg: hermite(keys, i, localT, span, (k) => k.thetaDeg),
       u: hermite(keys, i, localT, span, (k) => k.u),
       v: hermite(keys, i, localT, span, (k) => k.v),
+      constraint: constraintAt(clamped),
     };
   }
 
@@ -175,8 +170,9 @@ export class SwingPath {
   }
 
   /**
-   * Densely sampled path, cached until a keyframe moves.
-   * `local` is the 2D hand trace on the torso plane, `world` the 3D trace.
+   * Densely sampled path, cached until a keyframe moves or handedness changes.
+   * `local` is the (u, v) trace on the rectangle, `world` the true 3D trace --
+   * which is no longer planar, since the solved perpendicular distance varies.
    */
   sampledPath() {
     if (this.cache) return this.cache;

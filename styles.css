@@ -127,6 +127,14 @@ main {
   border-color: #ff8c8c;
 }
 
+.swatch.ring {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: none;
+}
+
 footer {
   border-top: 1px solid var(--line);
   padding: 8px 16px 10px;
@@ -216,6 +224,28 @@ input[type='range'] {
 
 .readouts dt {
   white-space: nowrap;
+}
+
+/* Marks whichever arm the rules are currently holding straight. */
+.readouts dt.locked {
+  color: var(--text);
+}
+
+.readouts dt.locked::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #ffd166;
+  vertical-align: middle;
+}
+
+button.toggle-button {
+  background: #1d2b40;
+  border-color: #34506f;
+  min-width: 104px;
 }
 
 .readouts dd {

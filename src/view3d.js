@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { BODY, PLANE, SCENE, COLORS } from './config.js';
-import { HIP_PIVOT, SHOULDER_CENTER, SPINE_AXIS, planeToWorld } from './kinematics.js';
+import { HIP_PIVOT, getRig, planeToWorld } from './kinematics.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
 
@@ -150,19 +150,55 @@ export class SceneView {
     this.scene.fog = new THREE.Fog('#0a0f1a', 6, 14);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 100);
-    this.camera.position.copy(v3(SCENE.cameraStart));
 
     this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.target.copy(v3(SCENE.cameraTarget));
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
 
     this.buildLights();
+    // Everything whose geometry depends on handedness lives in this group, so a
+    // flip is a rebuild of one group rather than of the whole scene.
+    this.staticGroup = new THREE.Group();
+    this.scene.add(this.staticGroup);
     this.buildStatic();
     this.buildBody();
     this.buildPaths();
+    this.resetCamera();
 
     this.resize();
+  }
+
+  /** Camera positions are mirrored along the chest normal with the golfer. */
+  cameraPose() {
+    const H = getRig().H;
+    return {
+      position: v3({
+        x: SCENE.cameraStart.x,
+        y: SCENE.cameraStart.y,
+        z: H * SCENE.cameraStart.forward,
+      }),
+      target: v3({
+        x: SCENE.cameraTarget.x,
+        y: SCENE.cameraTarget.y,
+        z: H * SCENE.cameraTarget.forward,
+      }),
+    };
+  }
+
+  /**
+   * Rebuild everything that depends on handedness and mirror the camera, so the
+   * new golfer is seen from the equivalent viewpoint.
+   */
+  applyHandedness() {
+    for (const child of [...this.staticGroup.children]) {
+      this.staticGroup.remove(child);
+      child.geometry?.dispose();
+      child.material?.dispose();
+    }
+    this.buildStatic();
+    this.torso.aim(HIP_PIVOT, getRig().shoulderCenter);
+    this.resetCamera();
+    this.refreshPaths();
   }
 
   buildLights() {
@@ -175,44 +211,56 @@ export class SceneView {
     this.scene.add(rim);
   }
 
+  /**
+   * Ground, ball, target line, legs and the spine axis. Everything here is
+   * static during a swing but mirrored by handedness, so it goes in
+   * `staticGroup` and is rebuilt by `applyHandedness`.
+   */
   buildStatic() {
-    const grid = new THREE.GridHelper(6, 24, '#22303f', '#161f2b');
-    this.scene.add(grid);
+    const group = this.staticGroup;
+    const { H, spineAxis } = getRig();
+    group.add(new THREE.GridHelper(6, 24, '#22303f', '#161f2b'));
 
-    const ball = joint(this.scene, SCENE.ballRadius, '#ffffff');
-    ball.position.copy(v3(SCENE.ballPosition));
+    // The ball sits on the chest-normal side, forward in the stance (lead side).
+    const ballZ = H * SCENE.ballForward;
+    const ball = joint(group, SCENE.ballRadius, '#ffffff');
+    ball.position.set(SCENE.ballLateral, SCENE.ballRadius, ballZ);
 
-    // Target line, marking the +X direction the ball flies.
-    const target = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(SCENE.ballPosition.x - 1.2, 0.002, SCENE.ballPosition.z),
-        new THREE.Vector3(SCENE.ballPosition.x + 2.4, 0.002, SCENE.ballPosition.z),
-      ]),
-      new THREE.LineBasicMaterial({ color: '#2f6f4f' }),
+    // Target line: the ball flies toward +X for either handedness.
+    group.add(
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(SCENE.ballLateral - 1.2, 0.002, ballZ),
+          new THREE.Vector3(SCENE.ballLateral + 2.4, 0.002, ballZ),
+        ]),
+        new THREE.LineBasicMaterial({ color: '#2f6f4f' }),
+      ),
     );
-    this.scene.add(target);
 
-    // Legs and pelvis: static by assumption, so they are placed once.
     const op = SCENE.bodyOpacity;
     const half = BODY.pelvisWidth / 2;
     for (const s of [1, -1]) {
       const hip = V.vec(HIP_PIVOT.x + s * half, HIP_PIVOT.y, HIP_PIVOT.z);
-      const knee = V.vec(s * (half + BODY.footSpread / 2) / 2, BODY.kneeHeight, BODY.kneeForward);
-      const foot = V.vec((s * BODY.footSpread) / 2, 0.03, 0.02);
-      new Segment(this.scene, 0.04, '#5c6a7d', op).aim(hip, knee);
-      new Segment(this.scene, 0.035, '#5c6a7d', op).aim(knee, foot);
-      joint(this.scene, 0.045, '#5c6a7d', op).position.copy(v3(hip));
-      joint(this.scene, 0.04, '#5c6a7d', op).position.copy(v3(knee));
+      const knee = V.vec(
+        (s * (half + BODY.footSpread / 2)) / 2,
+        BODY.kneeHeight,
+        H * BODY.kneeForward,
+      );
+      const foot = V.vec((s * BODY.footSpread) / 2, 0.03, H * -0.02);
+      new Segment(group, 0.04, '#5c6a7d', op).aim(hip, knee);
+      new Segment(group, 0.035, '#5c6a7d', op).aim(knee, foot);
+      joint(group, 0.045, '#5c6a7d', op).position.copy(v3(hip));
+      joint(group, 0.04, '#5c6a7d', op).position.copy(v3(knee));
     }
-    new Segment(this.scene, 0.045, '#5c6a7d', op).aim(
+    new Segment(group, 0.045, '#5c6a7d', op).aim(
       V.vec(HIP_PIVOT.x + half, HIP_PIVOT.y, HIP_PIVOT.z),
       V.vec(HIP_PIVOT.x - half, HIP_PIVOT.y, HIP_PIVOT.z),
     );
 
     // Spine axis: the fixed rotation axis, drawn well past the head.
-    const axisEnd = V.addScaled(HIP_PIVOT, SPINE_AXIS.dir, BODY.torsoLength + 0.55);
-    const axisStart = V.addScaled(HIP_PIVOT, SPINE_AXIS.dir, -0.25);
-    this.scene.add(
+    const axisEnd = V.addScaled(HIP_PIVOT, spineAxis.dir, BODY.torsoLength + 0.55);
+    const axisStart = V.addScaled(HIP_PIVOT, spineAxis.dir, -0.25);
+    group.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([v3(axisStart), v3(axisEnd)]),
         new THREE.LineDashedMaterial({ color: '#4d5f75', dashSize: 0.05, gapSize: 0.04 }),
@@ -223,7 +271,7 @@ export class SceneView {
   buildBody() {
     const op = SCENE.bodyOpacity;
     this.torso = new Segment(this.scene, 0.06, COLORS.body, op);
-    this.torso.aim(HIP_PIVOT, SHOULDER_CENTER);
+    this.torso.aim(HIP_PIVOT, getRig().shoulderCenter);
     this.shoulderLine = new Segment(this.scene, 0.045, COLORS.body, op);
     this.neck = new Segment(this.scene, 0.03, COLORS.body, op);
 
@@ -243,7 +291,11 @@ export class SceneView {
       trailUpper: new Segment(this.scene, 0.038, '#ff8c8c'),
       trailFore: new Segment(this.scene, 0.033, '#ff8c8c'),
       elbowLine: new Segment(this.scene, 0.013, COLORS.elbowLine),
+      // The automatic perpendicular axis, drawn from the drag point on the
+      // rectangle out to where the arm rules actually put the hand.
+      normal: new Segment(this.scene, 0.008, COLORS.normalAxis),
     };
+    this.dragMarker = joint(this.scene, 0.022, COLORS.normalAxis, 0.9);
 
     // Shoulders-to-hands triangle, redrawn each frame.
     this.triangle = new THREE.Line(
@@ -307,8 +359,9 @@ export class SceneView {
   }
 
   resetCamera() {
-    this.camera.position.copy(v3(SCENE.cameraStart));
-    this.controls.target.copy(v3(SCENE.cameraTarget));
+    const { position, target } = this.cameraPose();
+    this.camera.position.copy(position);
+    this.controls.target.copy(target);
     this.controls.update();
   }
 
@@ -345,6 +398,13 @@ export class SceneView {
     );
     tri.needsUpdate = true;
 
+    // The automatic perpendicular axis: drag point on the rectangle -> hand.
+    this.dragMarker.position.copy(v3(pose.planePoint));
+    this.limbs.normal.aim(pose.planePoint, pose.hand);
+    const offsetVisible = showPlane && Math.abs(pose.normalOffset) > 1e-3;
+    this.limbs.normal.mesh.visible = offsetVisible;
+    this.dragMarker.visible = showPlane;
+
     // Plane group: centre of the rectangle, oriented by (side, up, fwd).
     const centre = planeToWorld(
       basis,
@@ -352,11 +412,16 @@ export class SceneView {
       (PLANE.vMin + PLANE.vMax) / 2,
     );
     this.planeGroup.position.copy(v3(centre));
-    // (side, up, fwd) is a left-handed triple (fwd = up x side), so the third
-    // basis column is negated to keep the rotation matrix a pure rotation. The
-    // rectangle is two-sided, so which way its normal faces is immaterial.
+    // det(side, up, fwd) equals the handedness sign, so the third basis column
+    // is scaled by it to keep the matrix a pure rotation rather than a
+    // reflection. The rectangle is two-sided, so its normal direction does not
+    // matter visually.
     this.planeGroup.setRotationFromMatrix(
-      new THREE.Matrix4().makeBasis(v3(basis.side), v3(basis.up), v3(V.scale(basis.fwd, -1))),
+      new THREE.Matrix4().makeBasis(
+        v3(basis.side),
+        v3(basis.up),
+        v3(V.scale(basis.fwd, getRig().H)),
+      ),
     );
     // Offset the local trace so it sits in the rectangle's own centred frame.
     this.localTrace.position.set(

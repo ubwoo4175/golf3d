@@ -3,7 +3,7 @@
  * the 2D plane and the 3D scene synchronised: there is only ever one `t`.
  */
 
-import { TIMING } from './config.js';
+import { TIMING, DEFAULT_HANDEDNESS } from './config.js';
 
 export class Store {
   constructor(swing) {
@@ -14,6 +14,8 @@ export class Store {
       speed: TIMING.defaultSpeed,
       /** Index of the keyframe currently being dragged, or null. */
       dragging: null,
+      /** 'right' | 'left'. Mirrors the whole rig; see kinematics.setHandedness. */
+      handedness: DEFAULT_HANDEDNESS,
       showPath: true,
       showPlane: true,
       showLocalPath: true,

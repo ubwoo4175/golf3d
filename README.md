@@ -3,8 +3,8 @@
 Two synchronised views of how the hands move **relative to the torso** through a
 golf swing, shaped after Rory McIlroy's sequencing.
 
-- **Left — 2D hand plane.** The torso-fixed plane seen head-on, relative to the
-  elbow line. Drag here to reshape the swing.
+- **Left — 2D hand rectangle.** The torso-fixed rectangle seen head-on, relative
+  to the elbow line. Drag here to reshape the swing.
 - **Right — 3D world space.** The same motion with the torso rotating about a
   fixed spine axis, plus the full-swing hand path.
 
@@ -64,88 +64,138 @@ Assumptions, per the spec:
 | Torso | One degree of freedom: rotation `θ` about a fixed, tilted spine axis. |
 | Shoulders | Fixed to the top of the torso, so they rotate with it. |
 | Arms | Shoulder → elbow → hands, both hands meeting at one grip point. Shoulders + hands form the classic triangle. |
-| Hands | Confined to a torso-fixed rectangle. |
+| Hands | Dragged in 2D on a torso-fixed rectangle; the perpendicular distance off it is solved, not authored. |
 
 ### Coordinates
 
-World space is Y-up with the ground at `y = 0`, `+X` the target direction (also
-the golfer's lead side), and `−Z` the direction the chest faces at address. The
-model is a right-handed golfer.
+World space is Y-up with the ground at `y = 0` and `+X` the target direction.
+`+X` is also the golfer's **lead** side — the lead side faces the target whichever
+hand you play with, so this holds for both handednesses.
 
 The torso basis is `(side, up, fwd)`: `up` is the spine axis, `side` runs along
 the shoulder line toward the lead side, `fwd` is the chest normal.
 
-### The hand plane
-
-> *"The hand will move on a rectangle plane, with equal distance from the spine axis."*
-
-A plane is equidistant from a line only when it is **parallel** to it, so the hand
-plane is parallel to the spine axis at a constant `PLANE.offset` (30 cm) in front
-of the chest. Being torso-fixed, it rotates with the torso — which is exactly
-what makes it the natural 2D view. In-plane coordinates are measured from the
-shoulder centre:
+In-plane coordinates are measured from the shoulder centre:
 
 - `u` along the shoulder line, positive toward the lead side
 - `v` along the spine axis, positive toward the head
 
-`kinematics.js` verifies this: the axis-to-plane distance is 0.300000 m at every
-torso angle.
+### Handedness
 
-### The elbow rules, and one geometric conflict
+`lead` and `trail` are **roles, not sides**: lead is the left arm for a
+right-hander, the right arm for a left-hander. Flipping handedness is a mirror in
+Z, because a righty and a lefty hitting the same target stand on opposite sides of
+the ball facing opposite ways. Exactly two things flip:
 
-The spec's rules are:
+- `fwd`, the chest normal — `+Z` for a righty, `−Z` for a lefty
+- the direction the spine tilts forward, since "forward" means toward the ball
 
-| Phase | Lead (left) elbow | Trail (right) elbow |
+The lateral tilt does *not* flip: both lean away from the target, which is `+X`
+either way, so the lead shoulder rides high for both. Neither does `u` — it is
+always positive toward the lead side, which is why the keyframes are untouched by
+a flip and the same swing is simply mirrored onto the other side.
+
+The 2D view stays face-on by flipping only its horizontal *screen* mapping, so a
+right-hander's lead side (their left) appears on your right.
+
+### The rectangle and the automatic perpendicular axis
+
+The rectangle is torso-fixed and parallel to the spine axis. It is the surface you
+drag on; the hand does **not** lie on it. Given `(u, v)`, the hand's perpendicular
+distance `d` from the spine axis is solved so the locked arm is exactly straight:
+
+```
+d = √(target² − (u − u_shoulder)² − v²)
+```
+
+A straight arm puts the hand on a sphere about that shoulder; the line through
+`(u, v)` normal to the rectangle pierces that sphere. So there is a solution for
+every `(u, v)` inside a **disk** of radius `target` — an area, where the old fixed
+distance left only a circle. That is what makes free dragging compatible with a
+locked arm, and it is why the earlier version could not do both.
+
+`PLANE.offset` is now only where the reference rectangle is *drawn*. In the 3D
+view the solved offset is the short blue segment from the drag point out to the
+hand; the footer reports it as `⊥ offset`. Across the reference swing `d` runs
+0.21 → 0.46 m.
+
+### The arm rules
+
+| Phase | Lead elbow | Trail elbow |
 | --- | --- | --- |
-| Backswing | straight | folds |
-| Downswing | straight | extends |
-| Impact | straight | *still* extending |
-| Follow-through | folds | extended |
+| Backswing | straight | folds (to 115° at the top) |
+| Downswing | straight | extending |
+| **Impact (P7)** | straight | **still extending — 40° from straight** |
+| **Release (P8)** | **straight** | **straight** |
+| Follow-through | folds (to 98°) | straight |
 
-**These cannot hold while the hand roams the whole rectangle.** A straight lead
-arm puts the hand on a sphere of radius `REACH` about the lead shoulder;
-intersecting that sphere with the hand plane gives a *circle*, not an area. So a
-freely dragged hand cannot keep the lead elbow locked.
+The handover is at `RELEASE_T`, deliberately later than impact. Verified across
+2001 samples: the locked arm holds 99.7% extension through its entire phase, with
+no reach violations anywhere.
 
-The app resolves this by making the rules shape the **authored reference swing**
-rather than clamping the cursor:
+#### Why the hands must cross the sternum at release
 
-- Address through impact, the keyframes' `v` is **derived** from `u` by
-  `lockedLeadV()` so the lead arm sits at exactly `LEAD_LOCK_RATIO` (99%) of full
-  extension. Only `t`, torso angle and `u` are hand-authored. The rule holds by
-  construction and cannot drift when you edit the data.
-- Through the follow-through, `v` is authored directly, because the lead elbow is
-  now folding.
-- Dragging is free. Both elbows are solved by IK and the footer reports each
-  one's extension and flex, so you can see the rules hold — or watch them break.
-- The two dashed circles on the 2D plane are where each arm is exactly straight.
-  Outside their overlap the point is out of reach; that region is shaded, the
-  hand marker turns red, and the offending arm turns red in 3D.
+Substitute the solved `d` back into the *free* arm's length and it collapses to a
+function of `u` alone:
 
-Note that "straight" reads as ~16° of flex in the readout rather than 0°. That is
-not an error: the cosine is extremely flat near full extension, so 99% extension
-of a 32 cm + 35 cm arm really is a 16° elbow angle. Real lead arms carry a few
-degrees of flex too. Set `LEAD_LOCK_RATIO` to 1.0 for a mathematically straight
-arm, at the cost of sitting exactly on the reach boundary.
+```
+free² = target² ∓ 2·u·shoulderWidth      (− trail locked, + lead locked)
+```
+
+So `u` is the free elbow's fold control, and the free arm running out of length
+bounds `u` to a half-plane. With the lock ratio near 1 that bound sits ~3 mm from
+zero, which means **the rules by themselves force the hands onto the trail side of
+the sternum until release and the lead side after it, meeting at `u = 0`.** Both
+arms can only be straight together at `u = 0`; that is geometry, not a stylistic
+choice, and it is why the P8 keyframe has `u = 0` exactly.
+
+Two consequences worth knowing:
+
+- `d` peaks at release. Maximum extension away from the body happens exactly at
+  the handover, which is correct golf — and it puts a deliberate kink in `d` there,
+  since which arm is binding switches.
+- The reachable region shaded in the 2D view **changes with the phase you are
+  editing**, because it is the locked arm's disk cut by that half-plane. During
+  the lead-locked phase only the trail half of the rectangle is usable.
+
+Dragging is free, so you can still leave the reachable region — the hand marker
+turns red, the offending arm turns red in 3D, and the readout says by how much.
+Note that what fails is the *free* arm, not the locked one: the locked arm is
+always satisfied by construction.
+
+`ARM_LOCK_RATIO` is 0.997, not 1.0, for two reasons: a real locked arm keeps a few
+degrees of flex, and exactly 1.0 would sit on the reach boundary where the IK
+flags an overextension. It reads as 8.9° of elbow flex — the cosine is very flat
+near full extension, so that really is what 99.7% of a 32 + 35 cm arm looks like.
+
+### The path shape
+
+| Phase | Shape |
+| --- | --- |
+| Backswing | convex **upward** — bows above the chord from address to the top |
+| Downswing | convex downward, so it tracks 13–22 cm *below* the backswing |
+| Follow-through | convex downward |
+
+Backswing high and downswing low is the classic shallowing loop. Convexity is
+verified by a chord test, which is independent of traversal direction.
 
 ### The reference swing
 
-`REFERENCE_KEYFRAMES` in `src/swing.js` — 12 keyframes over `t ∈ [0, 1]`,
+`REFERENCE_KEYFRAMES` in `src/swing.js` — 11 keyframes over `t ∈ [0, 1]`,
 Catmull-Rom interpolated, ~1.35 s at full speed. It approximates Rory's
-positions: a wide low takeaway, 93° of shoulder turn at the top, a deep
-transition where the hands drop while the torso is already unwinding, and long
-extension through impact.
+positions: 93° of shoulder turn at the top, a deep transition where the hands drop
+while the torso is already unwinding, and long extension through impact.
 
 **It is hand-authored from published swing positions, not motion capture.** Treat
 it as a well-shaped starting point you tune by dragging, not as measured truth.
-
 ## Controls
 
 | Action | Effect |
 | --- | --- |
-| Drag on the 2D plane | Grabs the nearest keyframe handle, or the keyframe nearest the current time, and moves it. The 3D path reshapes live. |
+| Drag on the 2D rectangle | Grabs the nearest keyframe handle, or the keyframe nearest the current time, and moves it. The 3D path reshapes live. |
 | Space | Play / pause |
 | ← / → | Step keyframe |
+| H, or the handedness button | Flip right- / left-handed |
 | Drag / scroll on 3D | Orbit / zoom |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference
@@ -156,12 +206,12 @@ time or torso angle.
 
 | File | Responsibility |
 | --- | --- |
-| `src/config.js` | Every tunable: anthropometrics, plane geometry, timing, palette. |
+| `src/config.js` | Every tunable: anthropometrics, rectangle geometry, lock ratio, timing, palette. |
 | `src/vec3.js` | Dependency-free vector maths on plain `{x,y,z}`. |
-| `src/kinematics.js` | Torso basis, plane ↔ world mapping, two-link arm IK. No rendering, no time. |
+| `src/kinematics.js` | The rig and handedness, torso basis, the perpendicular-axis solve, two-link arm IK. No rendering, no time. |
 | `src/swing.js` | Keyframe track, interpolation, phase segmentation, path sampling. |
 | `src/state.js` | The single observable store both views subscribe to. |
-| `src/view2d.js` | Canvas 2D plane view and drag editing. |
+| `src/view2d.js` | Canvas 2D rectangle view and drag editing. |
 | `src/view3d.js` | Three.js scene. |
 | `src/main.js` | Wiring, controls, readouts, animation loop. |
 | `_config.yml`, `Gemfile` | Jekyll / GitHub Pages setup only. The app does not depend on them. |

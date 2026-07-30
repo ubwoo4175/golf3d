@@ -18,8 +18,9 @@
     <header>
       <h1>Golf Swing Hand Path</h1>
       <p class="sub">
-        Hands on a torso-fixed plane, parallel to the spine axis. Left: the plane head-on,
-        relative to the elbow&nbsp;line. Right: the same motion in world space.
+        Drag on a torso-fixed rectangle; the perpendicular distance from it is solved so the
+        locked arm stays straight. Left: the rectangle head-on, relative to the
+        elbow&nbsp;line. Right: the same motion in world space.
       </p>
     </header>
 
@@ -34,8 +35,9 @@
           <li><i class="swatch" style="background: #4aa3ff"></i>backswing</li>
           <li><i class="swatch" style="background: #ff9f43"></i>downswing</li>
           <li><i class="swatch" style="background: #c46bff"></i>follow-through</li>
-          <li><i class="swatch dash lead"></i>lead arm straight</li>
-          <li><i class="swatch dash trail"></i>trail arm straight</li>
+          <li><i class="swatch dash lead"></i>lead reach limit</li>
+          <li><i class="swatch dash trail"></i>trail reach limit</li>
+          <li><i class="swatch ring"></i><span id="release-label">release</span></li>
         </ul>
       </section>
 
@@ -64,9 +66,10 @@
       </div>
 
       <div class="toggles">
+        <button id="handedness" class="toggle-button">Right-handed</button>
         <label><input type="checkbox" id="showPath" />3D path</label>
-        <label><input type="checkbox" id="showPlane" />plane</label>
-        <label><input type="checkbox" id="showLocalPath" />trace on plane</label>
+        <label><input type="checkbox" id="showPlane" />rectangle + ⊥ axis</label>
+        <label><input type="checkbox" id="showLocalPath" />trace on rectangle</label>
         <label><input type="checkbox" id="showGuides" />reach guides</label>
         <button id="reset-path">Reset swing</button>
         <button id="reset-camera">Reset view</button>
@@ -78,8 +81,9 @@
         <div><dt>time</dt><dd id="r-time">—</dd></div>
         <div><dt>torso</dt><dd id="r-torso">—</dd></div>
         <div><dt>hand</dt><dd id="r-hand">—</dd></div>
-        <div><dt>lead</dt><dd id="r-lead" title="lead elbow: extension · flex">—</dd></div>
-        <div><dt>trail</dt><dd id="r-trail" title="trail elbow: extension · flex">—</dd></div>
+        <div><dt title="hand offset from the rectangle, and its distance from the spine axis">⊥ offset</dt><dd id="r-offset">—</dd></div>
+        <div><dt id="l-lead" title="lead elbow: extension · flex">lead</dt><dd id="r-lead">—</dd></div>
+        <div><dt id="l-trail" title="trail elbow: extension · flex">trail</dt><dd id="r-trail">—</dd></div>
       </dl>
     </footer>
 
