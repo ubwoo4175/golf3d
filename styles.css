@@ -1,0 +1,255 @@
+:root {
+  --bg: #070b12;
+  --panel: #0e1522;
+  --line: #1e2a3b;
+  --text: #dbe4f0;
+  --muted: #7d8ca0;
+  --accent: #4aa3ff;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+
+header {
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1px;
+  background: var(--line);
+  min-height: 0;
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane canvas {
+  flex: 1;
+  display: block;
+  width: 100%;
+  min-height: 0;
+}
+
+.pane-title {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.hint {
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.75;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 6px 12px 8px;
+  list-style: none;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.swatch.dash {
+  height: 0;
+  border-top: 2px dashed;
+}
+
+.swatch.dash.lead {
+  border-color: #78f0be;
+}
+
+.swatch.dash.trail {
+  border-color: #ff8c8c;
+}
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 8px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.transport,
+.toggles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: #172133;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: #17385c;
+  border-color: #2f6fb5;
+  min-width: 88px;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 160px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.slider.narrow {
+  flex: 0 0 190px;
+}
+
+input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.toggles label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* A fixed grid, not a wrapping flex row: readout values change length as the
+   swing plays, and a reflowing footer would resize both canvases mid-animation. */
+.readouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 2px 16px;
+  margin: 0;
+  padding-top: 3px;
+  border-top: 1px solid var(--line);
+}
+
+.readouts div {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.readouts div.wide {
+  grid-column: span 2;
+}
+
+.readouts dt {
+  white-space: nowrap;
+}
+
+.readouts dd {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.readouts dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.readouts dd {
+  margin: 0;
+  font: 12px ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.readouts dd.warn {
+  color: #ff6b7d;
+}
+
+@media (max-width: 900px) {
+  body {
+    overflow: auto;
+  }
+
+  main {
+    grid-template-columns: 1fr;
+  }
+
+  .pane {
+    height: 58vh;
+  }
+}

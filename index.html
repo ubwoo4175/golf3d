@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Golf Swing Hand Path — 3D Simulator</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header>
+      <h1>Golf Swing Hand Path</h1>
+      <p class="sub">
+        Hands on a torso-fixed plane, parallel to the spine axis. Left: the plane head-on,
+        relative to the elbow&nbsp;line. Right: the same motion in world space.
+      </p>
+    </header>
+
+    <main>
+      <section id="plane-pane" class="pane">
+        <div class="pane-title">
+          <span>2D — hand plane (torso frame)</span>
+          <span class="hint">drag to reshape the swing</span>
+        </div>
+        <canvas id="plane-canvas"></canvas>
+        <ul class="legend">
+          <li><i class="swatch" style="background: #4aa3ff"></i>backswing</li>
+          <li><i class="swatch" style="background: #ff9f43"></i>downswing</li>
+          <li><i class="swatch" style="background: #c46bff"></i>follow-through</li>
+          <li><i class="swatch dash lead"></i>lead arm straight</li>
+          <li><i class="swatch dash trail"></i>trail arm straight</li>
+        </ul>
+      </section>
+
+      <section id="scene-pane" class="pane">
+        <div class="pane-title">
+          <span>3D — world space</span>
+          <span class="hint">drag to orbit · scroll to zoom</span>
+        </div>
+        <canvas id="scene-canvas"></canvas>
+      </section>
+    </main>
+
+    <footer>
+      <div class="transport">
+        <button id="prev-key" title="Previous keyframe (←)">⏮</button>
+        <button id="play" class="primary">▶ Play</button>
+        <button id="next-key" title="Next keyframe (→)">⏭</button>
+        <label class="slider">
+          <span>swing</span>
+          <input id="scrub" type="range" min="0" max="1000" step="1" value="0" />
+        </label>
+        <label class="slider narrow">
+          <span>speed</span>
+          <input id="speed" type="range" min="5" max="100" step="1" value="30" />
+        </label>
+      </div>
+
+      <div class="toggles">
+        <label><input type="checkbox" id="showPath" />3D path</label>
+        <label><input type="checkbox" id="showPlane" />plane</label>
+        <label><input type="checkbox" id="showLocalPath" />trace on plane</label>
+        <label><input type="checkbox" id="showGuides" />reach guides</label>
+        <button id="reset-path">Reset swing</button>
+        <button id="reset-camera">Reset view</button>
+      </div>
+
+      <dl class="readouts">
+        <div class="wide"><dt>keyframe</dt><dd id="r-keyframe">—</dd></div>
+        <div><dt>phase</dt><dd id="r-phase">—</dd></div>
+        <div><dt>time</dt><dd id="r-time">—</dd></div>
+        <div><dt>torso</dt><dd id="r-torso">—</dd></div>
+        <div><dt>hand</dt><dd id="r-hand">—</dd></div>
+        <div><dt>lead</dt><dd id="r-lead" title="lead elbow: extension · flex">—</dd></div>
+        <div><dt>trail</dt><dd id="r-trail" title="trail elbow: extension · flex">—</dd></div>
+      </dl>
+    </footer>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
