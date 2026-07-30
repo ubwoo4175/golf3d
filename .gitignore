@@ -1,2 +1,15 @@
 node_modules/
 .DS_Store
+
+# Jekyll build output and caches
+_site/
+.jekyll-cache/
+.jekyll-metadata
+
+# Bundler. Gemfile.lock is deliberately not tracked: GitHub Pages ignores it and
+# resolves from the version-pinned `github-pages` gem itself, so committing a
+# lock only risks pinning transitive gems -- or a `BUNDLED WITH` version -- that
+# fights whatever Bundler a contributor happens to have.
+Gemfile.lock
+.bundle/
+vendor/

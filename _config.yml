@@ -1,0 +1,31 @@
+title: Golf Swing Hand Path
+description: >-
+  A 3D simulator for golf swing hand motion relative to the torso, with a
+  synchronised 2D view of the torso-fixed hand plane.
+
+# The app is a plain static page: index.html, styles.css and src/*.js are copied
+# through verbatim. Nothing here needs a layout or Liquid templating, and
+# index.html deliberately carries no front matter so that Jekyll treats it as a
+# static file. That keeps the import map safe from Liquid and means a bare
+# `python3 -m http.server` serves byte-identical output.
+
+# No theme. The github-pages gem otherwise defaults to jekyll-theme-primer,
+# whose stylesheet is dead weight here and whose SCSS is the only thing in the
+# build that needs compiling.
+theme: null
+
+# The UI uses UTF-8 glyphs (arrows, middots, transport symbols). Ruby falls back
+# to US-ASCII when the shell has no locale set, which breaks reading them.
+encoding: utf-8
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - node_modules
+  - vendor
+  - .bundle
+
+# Nothing in the project relies on `site.baseurl`, so the same build works at a
+# user site root and under a project path like /golf3d/ -- every asset reference
+# in index.html is relative.

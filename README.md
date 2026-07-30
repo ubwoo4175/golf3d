@@ -13,14 +13,46 @@ out of step.
 
 ## Running it
 
-No build step. Any static server works:
+The app itself has no build step — it is `index.html` plus ES modules. It must
+be served over HTTP, though: Three.js comes from a CDN via an import map, and
+opening `index.html` off the filesystem fails on module CORS.
+
+### With Jekyll (matches GitHub Pages)
 
 ```sh
-python3 -m http.server 8000     # then open http://localhost:8000
+bundle install
+bundle exec jekyll serve        # http://localhost:4000
 ```
 
-Three.js is loaded from a CDN via an import map, so it must be served over HTTP —
-opening `index.html` straight off the filesystem will fail on module CORS.
+The `Gemfile` pins the `github-pages` gem, so a local build is the same Jekyll
+that GitHub Pages runs. `_config.yml` sets `theme: null` — the app ships its own
+complete stylesheet, and the gem's default `jekyll-theme-primer` would otherwise
+be compiled into the output for nothing.
+
+Everything is a static file: `index.html` carries no YAML front matter, so Jekyll
+copies it and `src/*.js` through byte-for-byte rather than running them through
+Liquid. That keeps the import map's JSON safe from Liquid's `{`-handling, and
+means the Jekyll build and a plain static server serve identical bytes.
+
+If Ruby reports `Invalid US-ASCII character`, your shell has no locale set and
+Ruby is reading UTF-8 source as ASCII:
+
+```sh
+export LANG=C.UTF-8            # or en_US.UTF-8
+```
+
+### Without Jekyll
+
+```sh
+python3 -m http.server 8000     # http://localhost:8000
+```
+
+### Publishing to GitHub Pages
+
+Settings → Pages → Source: *Deploy from a branch*, then pick the branch and the
+`/ (root)` folder. GitHub runs Jekyll over the repo with this `_config.yml` and
+serves the result at `https://<user>.github.io/golf3d/`. Every asset reference in
+`index.html` is relative, so the project-path prefix needs no `baseurl`.
 
 ## The model
 
@@ -132,6 +164,7 @@ time or torso angle.
 | `src/view2d.js` | Canvas 2D plane view and drag editing. |
 | `src/view3d.js` | Three.js scene. |
 | `src/main.js` | Wiring, controls, readouts, animation loop. |
+| `_config.yml`, `Gemfile` | Jekyll / GitHub Pages setup only. The app does not depend on them. |
 
 `kinematics.js` deliberately does not import Three.js — vectors convert to
 `THREE.Vector3` only at the rendering boundary, so the model stays testable and
