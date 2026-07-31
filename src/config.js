@@ -176,10 +176,13 @@ export const RELEASE_BLEND_T = 0.025;
 export const TIMING = {
   /**
    * Real-world duration of the full swing at playback speed 1.0, seconds.
-   * Chosen so the backswing lands at ~0.75 s and the downswing at ~0.25 s, the
-   * ~3:1 tour tempo. Every angular velocity scales with this.
+   *
+   * Solved, not chosen. A 0.75 s backswing and the 3:1 tempo fix impact at
+   * 1.00 s; requiring the torso to decelerate from its peak to a standstill at
+   * the finish while covering the remaining 85 degrees then fixes the rest at
+   * 0.235 s. Every angular velocity scales with this.
    */
-  swingSeconds: 1.45,
+  swingSeconds: 1.235,
   defaultSpeed: 0.3,
   /** Samples used to draw the hand-path curves. */
   pathSamples: 260,

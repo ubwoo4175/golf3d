@@ -251,20 +251,27 @@ u through the top:  P3 −0.156  →  P4 −0.237  →  P5 −0.287     monotoni
 v through the top:  P3 −0.114  →  P4 −0.015  →  P5 −0.210     reverses at P4
 ```
 
-Only **one** of the two coordinates turns at P4, so `du/dt ≠ 0` there and the hand
-cannot stop. `u` does not reverse until t = 0.593, well after the top — the
-transition float, the hands still drifting back while the torso has started down.
+Only **one** of the two coordinates turns at P4 (t = 0.6075), so `du/dt ≠ 0` there
+and the hand cannot stop. `u` does not reverse until t = 0.708, well after the
+top — the transition float, the hands still drifting back while the torso has
+started down.
 
 In the previous default both coordinates reversed at P4 together, which forced the
-hand velocity toward zero and pinched the loop into a near-point. Measured:
+hand velocity toward zero and pinched the loop into a near-point. Measured over
+3000 samples, both shapes run on the *current* solved timing so the columns differ
+only in shape:
 
 | | previous default | this shape |
 | --- | --- | --- |
 | Kink spikes in the world path | 1 | **none** |
-| Largest velocity-direction step | 1.05° | 1.22° |
-| Minimum hand speed at the top | 0.685 m/s | **0.964 m/s** |
-| Tightest radius at the top | 0.9 cm | **1.6 cm** |
-| Peak hand speed | 10.76 m/s | **7.90 m/s** |
+| Largest velocity-direction step | 6.16° | **4.27°** |
+| Minimum hand speed at the top | 0.395 m/s | **0.526 m/s** |
+| Tightest radius at the top | 1.7 cm | **3.5 cm** |
+| Peak hand speed | 12.11 m/s | 13.93 m/s |
+
+Peak hand speed is not an improvement, just a consequence — this shape holds a
+wider radius through impact, and on an 867°/s torso a wider radius is a faster
+hand. See the tempo section for why the torso runs that fast.
 
 ### The P-system and shoulder rotation
 
@@ -273,40 +280,113 @@ to a tour long-iron swing.
 
 | | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | address | 0.000 | 0.00 s | 0° | **0.0** | −45.0 | 44.5 |
-| P1.5 | takeaway | 0.110 | 0.16 s | +22° | **0.0** | −40.6 | 48.5 |
-| P2 | shaft parallel | 0.200 | 0.29 s | +40° | −5.9 | −25.2 | 55.5 |
-| P3 | lead arm parallel to ground | 0.320 | 0.46 s | +60° | −15.6 | −11.4 | 54.5 |
-| P4 | top of backswing | 0.520 | 0.75 s | **+90°** | −23.7 | −1.5 | 49.4 |
-| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° | −28.7 | −21.0 | 39.2 |
-| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** | −23.0 | −33.2 | 37.5 |
-| P7 | impact | 0.690 | 1.00 s | −35° | −13.1 | −38.4 | 42.5 |
-| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° | **0.0** | −35.4 | 52.4 |
-| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° | +4.0 | −26.5 | 55.8 |
-| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** | +12.8 | −11.7 | 56.3 |
-| P10 | finish | 1.000 | 1.45 s | **−120°** | +22.0 | +0.2 | 50.9 |
+| P1 | address | 0.0000 | 0.000 s | 0° | **0.0** | −45.0 | 44.5 |
+| P1.5 | takeaway | 0.2213 | 0.273 s | +22° | **0.0** | −40.6 | 48.5 |
+| P2 | shaft parallel | 0.2868 | 0.354 s | +40° | −5.9 | −25.2 | 55.5 |
+| P3 | lead arm parallel to ground | 0.3556 | 0.439 s | +60° | −15.6 | −11.4 | 54.5 |
+| P4 | top of backswing | 0.6075 | 0.750 s | **+90°** | −23.7 | −1.5 | 49.4 |
+| P5 | early downswing, lead arm parallel | 0.7317 | 0.904 s | +45° | −28.7 | −21.0 | 39.2 |
+| P6 | delivery, shaft parallel | 0.7767 | 0.959 s | **0°** | −23.0 | −33.2 | 37.5 |
+| P7 | impact | 0.8100 | 1.000 s | −35° | −13.1 | −38.4 | 42.7 |
+| P7.5 | release, both arms straight | 0.8307 | 1.026 s | −55° | **0.0** | −35.4 | 52.4 |
+| P8 | follow-through, shaft parallel | 0.8505 | 1.050 s | −72° | +4.0 | −26.5 | 55.9 |
+| P9 | shoulders square to target | 0.8756 | 1.081 s | **−90°** | +12.8 | −11.7 | 56.3 |
+| P10 | finish | 1.0000 | 1.235 s | **−120°** | +22.0 | +0.2 | 50.9 |
 
 The four bold angles are not free parameters — P4, P6, P9 and P10 are *defined*
 by their shoulder rotation, so they are pinned exactly and the rest interpolate
 between them. P7.5's `u = 0` is forced by geometry, not chosen. P1's `u` and `v`
 are derived from the spine tilt and are the values for the 32° default; the axis
-distance column is solved, never authored.
-
-Timing is a real constraint, not decoration. Backswing 0.75 s against a 0.25 s
-downswing is the ~3:1 tour tempo, and it puts peak torso rotation at **748°/s**
-through impact — the right order for a tour player, and Rory sits at the quick end
-of that range. Change `TIMING.swingSeconds` and every angular velocity scales
-with it.
+distance column is solved, never authored. **The `t` column is solved too** — see
+the tempo section below.
 
 **The positions are hand-authored from published swing positions, not motion
 capture.** Treat them as a well-shaped starting point you tune by dragging.
 
+### Tempo: where the times come from
+
+The P *angles* say nothing about how fast the torso passes through them, and for a
+long time the times were authored by eye. That made the torso turn at a nearly
+constant rate, which is wrong in a specific and visible way: it had the golfer
+already turning at 138°/s at address and still turning at −138°/s at the finish,
+when in fact they are standing still at both.
+
+So the times are no longer authored. What is authored is a torso *angular-velocity*
+profile; the times are read off by integrating it.
+
+The profile has three rest points — address, the top, the finish — where ω is
+exactly zero, and two smooth humps between them:
+
+```
+backswing    ω = A sin²(π t / T_back)     rest → peak → rest
+post-top     ramp up to the peak, then decay to rest at the finish
+```
+
+The downswing peak is placed 40 ms *before* impact, not at it, because in the
+kinematic sequence the thorax peaks and is already handing speed outward by the
+time the club arrives.
+
+That leaves four unknowns — the backswing amplitude, the downswing peak, the decay
+rate, and the total duration — against four hard constraints, all of which come
+from the P-system or from your 3:1 tempo:
+
+- θ = **+90°** at the top (P4 is *defined* as 90° of shoulder turn)
+- θ = **−35°** at impact
+- θ = **−120°** at the finish (P10 is *defined* as 120°)
+- backswing : downswing = **3 : 1**
+
+Four and four, so nothing is fitted or tuned. The solution:
+
+| | |
+| --- | --- |
+| Backswing (address → top) | **0.750 s** |
+| Downswing (top → impact) | **0.250 s** |
+| Impact → finish | 0.235 s |
+| **Total, `TIMING.swingSeconds`** | **1.235 s** |
+| Peak backswing rotation | **240°/s**, at 0.375 s |
+| Peak downswing rotation | **867°/s**, 40 ms before impact |
+| Ratio, as solved | 3.0000 : 1 |
+
+Every angular velocity scales with `TIMING.swingSeconds`, so changing that one
+number retimes the whole swing without touching the shape.
+
+The peak backswing figure, 240°/s, sits normally in the tour range. **The peak
+downswing figure, 867°/s, is above the commonly published tour thorax range of
+550–750°/s, and it is worth being clear that this is forced rather than chosen.**
+125° of rotation in 0.25 s is a *mean* of 500°/s on its own, and any profile that
+starts from rest at the top and peaks smoothly puts the peak at roughly 1.7× the
+mean. There is no profile shape that satisfies all four constraints and stays under
+750°/s. Lowering it means changing one of the constraints, not the profile:
+
+- **less turn at the top** — 80° instead of 90° takes the peak to about 800°/s
+- **less unwind by impact** — −25° instead of −35° takes it to about 790°/s
+- **a slower ratio** — 3.5:1 with the same backswing lengthens the downswing
+- Published thorax peaks are also measured on the *thorax segment*, whereas this
+  model has a single rigid torso carrying the shoulders, so the two are not quite
+  measuring the same thing.
+
+All four are one-line edits, and the profile re-solves around whichever you pick.
+
+Reconstructing the profile back out of the 12 interpolated keyframes gives 246°/s
+and 867°/s against the model's 240 and 867, with ω = 0.0 at all three rest points
+— so the keyframe track really does carry the tempo, not just the positions. The
+one thing the reconstruction does not hold exactly is *where* the downswing peak
+falls: the model places it 40 ms before impact, the interpolated track 23 ms. Only
+12 samples describe the whole profile, and the four pinned angles get priority
+over the peak's position.
+
+**The same caveat as everywhere else applies: this is derived from published
+tour-level kinematic ranges and the P-system's own definitions, not from Rory
+McIlroy motion capture, which I do not have.**
+
 ### Interpolation, and keeping the 3D path smooth
 
-Four things had to be right before the world hand path flowed without a corner.
-Measured on the world path, the largest step in velocity direction anywhere went
-from **15.4° to 1.05°**, and the tightest corner from a 0.47 mm radius to a
-genuine, smooth reversal at the top.
+Five things had to be right before the world hand path flowed without a corner.
+When these were fixed, the largest step in velocity direction on the world path
+went from **15.4° to 1.05°** and the tightest corner from a 0.47 mm radius to a
+genuine, smooth reversal at the top. (Those two figures were measured against the
+shape and timing in place at the time; the current defaults are re-measured in the
+tables above and below.)
 
 **1. Non-uniform tangents.** The familiar
 `(y[i+1] − y[i−1]) / (t[i+1] − t[i−1])` is the *uniform* Catmull-Rom formula, and
@@ -343,6 +423,14 @@ which is why `ARM_LOCK_RATIO` is 0.995 rather than 0.997 — that leaves headroo
 under `REACH` so the safety cap in `solvePose` never has to bind (it stays as a
 guard for dragged poses, with 0.8 mm to spare).
 
+**5. Zero tangents at the two ends.** The first and last keyframes have no
+neighbour on one side, and the natural fallback is a one-sided difference. But the
+golfer is standing still at address and has stopped at the finish, so the correct
+end condition is ω = 0, not "whatever the first interval was doing". The one-sided
+fallback instead started the torso already turning at ~140°/s and left it still
+turning at the finish, and that — more than anything else — is what made the old
+timing read as constant angular speed no matter what the keyframe times said.
+
 #### Straight segments
 
 Two keyframes close together still inherit a tangent scaled to their distant
@@ -364,6 +452,13 @@ below it are drawn as straight lines, which takes P7 → P7.5 to exactly 1.000.
 
 Set `CURVE.straightBelow = Infinity` for an all-straight polyline — that is the
 whole change, one value in `config.js`.
+
+**The rule applies to the hand track only, never to the torso angle.** It is a
+statement about the drawn path in `(u, v)` and nothing else. Letting it straighten
+the angle track as well makes the torso turn at a *constant* rate for the whole of
+that segment — and since the takeaway P1 → P1.5 is a straight segment lasting
+273 ms, that alone was enough to put the torso at 80°/s at address, with the
+golfer standing still. The angle is always interpolated as a curve.
 
 One curve is *not* distortion and is deliberately kept: P4 → P5 reverses direction
 slightly in `u`, because the hands drift a little past the top before changing

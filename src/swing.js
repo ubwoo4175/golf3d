@@ -34,9 +34,9 @@ import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { solvePose, naturalAddress, axisDistanceFor } from './kinematics.js';
 
 export const PHASES = [
-  { id: 'backswing', label: 'Backswing', start: 0, end: 0.52 },
-  { id: 'downswing', label: 'Downswing', start: 0.52, end: 0.69 },
-  { id: 'followThrough', label: 'Follow-through', start: 0.69, end: 1 },
+  { id: 'backswing', label: 'Backswing', start: 0, end: 0.6075 },
+  { id: 'downswing', label: 'Downswing', start: 0.6075, end: 0.81 },
+  { id: 'followThrough', label: 'Follow-through', start: 0.81, end: 1 },
 ];
 
 export const phaseAt = (t) =>
@@ -44,10 +44,11 @@ export const phaseAt = (t) =>
 
 /**
  * Release (P7.5): where the straight-arm constraint hands over from the lead arm
- * to the trail arm. Deliberately after impact (P7, t = 0.69) -- the trail arm is
- * still extending through impact and only reaches full length here.
+ * to the trail arm. Deliberately after impact (P7, t = 0.81, 26 ms earlier) --
+ * the trail arm is still extending through impact and only reaches full length
+ * here.
  */
-export const RELEASE_T = 0.725;
+export const RELEASE_T = 0.8307;
 
 /** Which arm is held straight at time t. */
 export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
@@ -74,10 +75,19 @@ export function releaseBlendAt(t) {
  * neutral at delivery, -90 square to the target, -120 at the finish. The rest are
  * interpolated to match long-iron sequencing.
  *
- * TIMING. Backswing 0.75 s, downswing (P4 to P7) 0.25 s -- the ~3:1 tour tempo.
- * That is not cosmetic: it puts peak torso rotation speed through impact at about
- * 690 deg/s, which is the right order for a tour player. Change `swingSeconds`
- * and every angular velocity scales with it.
+ * TIMING. The P times are NOT authored -- they are solved from a torso
+ * angular-velocity profile, because the angles alone say nothing about how fast
+ * the torso passes through them. The profile has three rest points (address, the
+ * top, the finish) joined by smooth ramps, with the downswing peak 40 ms before
+ * impact, as the thorax leads the club in the kinematic sequence:
+ *
+ *     backswing   w = A sin^2(pi t / T_back)        peak  240 deg/s
+ *     post-top    ramp up to the peak, then down     peak  867 deg/s
+ *
+ * Constraints: +90 at the top, -35 at impact, -120 at the finish, and impact on
+ * the 3:1 mark. Those four fix everything else, including the total duration of
+ * 1.235 s -- see the README for the derivation and for why the peak comes out
+ * where it does.
  *
  * HAND PATH. u is <= 0 up to release and >= 0 after, hitting exactly 0 at
  * release. That is not a stylistic choice -- `freeArmULimit` shows the rules
@@ -88,23 +98,23 @@ export const REFERENCE_KEYFRAMES = [
   // both arms stay equally straight through it: a one-piece takeaway. The
   // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
   { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.45, label: 'P1 address' },
-  { t: 0.11, thetaDeg: 22, u: 0.0, v: -0.406, label: 'P1.5 takeaway' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.406, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
-  { t: 0.2, thetaDeg: 40, u: -0.059, v: -0.252, label: 'P2 shaft parallel' },
-  { t: 0.32, thetaDeg: 60, u: -0.156, v: -0.114, label: 'P3 lead arm parallel' },
-  { t: 0.52, thetaDeg: 90, u: -0.237, v: -0.015, label: 'P4 top, shoulders 90° away' },
+  { t: 0.2868, thetaDeg: 40, u: -0.059, v: -0.252, label: 'P2 shaft parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.156, v: -0.114, label: 'P3 lead arm parallel' },
+  { t: 0.6075, thetaDeg: 90, u: -0.237, v: -0.015, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
   // keep drifting away from the target while the torso has already started down.
   // That is the transition float, and it is what opens the loop at the top --
   // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.6, thetaDeg: 45, u: -0.287, v: -0.21, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.655, thetaDeg: 0, u: -0.23, v: -0.332, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.69, thetaDeg: -35, u: -0.131, v: -0.384, label: 'P7 impact' },
+  { t: 0.7317, thetaDeg: 45, u: -0.287, v: -0.21, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7767, thetaDeg: 0, u: -0.23, v: -0.332, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.81, thetaDeg: -35, u: -0.131, v: -0.384, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
   { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.354, label: 'P7.5 release, both arms straight' },
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
-  { t: 0.775, thetaDeg: -72, u: 0.04, v: -0.265, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.85, thetaDeg: -90, u: 0.128, v: -0.117, label: 'P9 shoulders 90° to target' },
+  { t: 0.8505, thetaDeg: -72, u: 0.04, v: -0.265, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.8756, thetaDeg: -90, u: 0.128, v: -0.117, label: 'P9 shoulders 90° to target' },
   { t: 1.0, thetaDeg: -120, u: 0.22, v: 0.002, label: 'P10 finish, shoulders 120°' },
 ];
 
@@ -145,8 +155,11 @@ function tangent(keys, i, get, monotone = false, isStraight = () => false) {
   const prev = keys[i - 1];
   const next = keys[i + 1];
   const cur = keys[i];
-  if (!prev) return (get(next) - get(cur)) / (next.t - cur.t);
-  if (!next) return (get(cur) - get(prev)) / (cur.t - prev.t);
+  // The swing starts and ends at rest: the golfer is motionless at address and
+  // has stopped at the finish. A one-sided difference here would instead start
+  // the torso already turning at ~140 deg/s and leave it still turning at the
+  // finish, which is what made the old timing look like constant angular speed.
+  if (!prev || !next) return 0;
   const dtPrev = cur.t - prev.t;
   const dtNext = next.t - cur.t;
   const slopePrev = (get(cur) - get(prev)) / dtPrev;
@@ -282,17 +295,25 @@ export class SwingPath {
     const straight = this.isStraightSegment(i);
     const isStraight = (index) =>
       index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
-    const interp = (get, monotone = false) =>
-      straight ? lerp(get) : hermite(keys, i, localT, span, get, monotone, isStraight);
+    const hand = (get) =>
+      straight ? lerp(get) : hermite(keys, i, localT, span, get, false, isStraight);
 
     // The torso angle is pinned by the P-system, so it is interpolated without
     // overshoot; the hand track is free and is interpolated for smoothness.
-    const thetaDeg = interp((k) => k.thetaDeg, true);
+    //
+    // The straight-segment rule applies to the HAND ONLY. It exists to stop the
+    // cubic bulging when two keyframes are close together in the (u, v) plane,
+    // which is a statement about the drawn path and nothing else. Letting it also
+    // straighten the angle track would make the torso turn at a constant rate for
+    // the whole of that segment -- and since the takeaway is a straight segment
+    // lasting 273 ms, that alone put the torso at 80 deg/s at address, when the
+    // golfer is standing still. The angle is always interpolated as a curve.
+    const thetaDeg = hermite(keys, i, localT, span, (k) => k.thetaDeg, true);
     return {
       theta: rad(thetaDeg),
       thetaDeg,
-      u: interp((k) => k.u),
-      v: interp((k) => k.v),
+      u: hand((k) => k.u),
+      v: hand((k) => k.v),
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
     };
