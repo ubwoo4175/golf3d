@@ -186,11 +186,14 @@ export class SceneView {
   }
 
   /**
-   * Rebuild everything that depends on the rig -- handedness and spine tilt --
-   * and reframe the camera, so the new golfer is seen from the equivalent
-   * viewpoint.
+   * Rebuild everything that depends on the rig -- handedness and spine tilt.
+   *
+   * The camera is left alone unless `mirrorCamera` is set. Changing spine tilt
+   * must not throw away the viewpoint you have orbited to; flipping handedness
+   * does need to cross to the other side of the ball, but it mirrors the current
+   * camera rather than resetting it, so orbit distance and elevation survive.
    */
-  rebuildRig() {
+  rebuildRig({ mirrorCamera = false } = {}) {
     for (const child of [...this.staticGroup.children]) {
       this.staticGroup.remove(child);
       child.geometry?.dispose();
@@ -198,7 +201,11 @@ export class SceneView {
     }
     this.buildStatic();
     this.torso.aim(HIP_PIVOT, getRig().shoulderCenter);
-    this.resetCamera();
+    if (mirrorCamera) {
+      this.camera.position.z *= -1;
+      this.controls.target.z *= -1;
+      this.controls.update();
+    }
     this.refreshPaths();
   }
 

@@ -25,6 +25,12 @@ import {
   DEFAULT_HANDEDNESS,
 } from './config.js';
 
+/**
+ * Hard ceiling on arm extension, just under 1.0 so it stays clear of the IK's own
+ * overextension threshold. Only the release blend ever reaches it.
+ */
+const ARM_CAP_RATIO = 0.999;
+
 /** Sign convention: theta > 0 is the backswing (torso turns away from target). */
 export const BACKSWING_SIGN = 1;
 
@@ -125,33 +131,34 @@ export const setPlaneOffset = (distance) => {
 export const getPlaneOffset = () => planeOffset;
 
 /**
- * The address hand position for the current spine tilt, in plane coordinates.
+ * The anchored address hand position, in plane coordinates.
  *
  * At u = 0 the hand is equidistant from both shoulders, so a locked lead arm
  * confines it to a circle of radius
  *     r = sqrt(target^2 - (shoulderWidth / 2)^2)
  * about the shoulder centre, in the plane spanned by the spine axis and the chest
- * normal -- the sagittal plane you see the golfer's setup in from the side.
- * Parametrising that circle by the angle `phi` off plumb gives
- *     v = -r * cos(tilt + phi)      distance = r * sin(tilt + phi)
- * which satisfies the arm-length constraint identically, so the address point is
- * always exactly reachable however the tilt is set.
+ * normal -- the sagittal plane you see the golfer's setup in from the side. The
+ * anchor is the point on that circle where the arms hang plumb at the short-iron
+ * setup, `ADDRESS.anchorTiltDeg`:
+ *     v = -r * cos(anchorTilt)      distance = r * sin(anchorTilt)
  *
- * phi = 0 is a plumb hang -- the arms straight down in the side view -- and holds
- * at `ADDRESS.plumbTiltDeg` and steeper. Lifting the spine toward the long clubs
- * opens phi, raising the hands above plumb.
+ * It does NOT depend on the current spine tilt. Note what that implies: since
+ * (u, v) is fixed and the arm length is fixed, the perpendicular distance is
+ * fixed too -- the arm-length constraint ties all three together. So changing the
+ * tilt leaves the hand completely fixed IN THE TORSO FRAME, and the rectangle,
+ * which is pinned to it, never moves either. What changes is the world pose: the
+ * torso frame rotates, carrying the whole arm assembly with it, so the hands rise
+ * and swing away from the body as the spine lifts toward the long clubs.
  */
 export function naturalAddress() {
   const target = ARM_LOCK_RATIO * REACH;
   const half = BODY.shoulderWidth / 2;
   const radius = Math.sqrt(Math.max(0, target * target - half * half));
-  const lift = Math.max(0, ADDRESS.plumbTiltDeg - spineTiltForwardDeg) * ADDRESS.liftPerDegree;
-  const angle = V.rad(spineTiltForwardDeg + lift);
+  const angle = V.rad(ADDRESS.anchorTiltDeg);
   return {
     u: 0,
     v: -radius * Math.cos(angle),
     axisDistance: radius * Math.sin(angle),
-    liftDeg: lift,
   };
 }
 
@@ -304,10 +311,38 @@ const hintVector = (basis, weights) => {
  * @returns pose with world joints, the torso basis, elbow readouts, and a
  *   `handFrame` that a club can be parented to later.
  */
-export function solvePose({ theta, u, v, constraint = 'lead', ratio = ARM_LOCK_RATIO }) {
+export function solvePose({
+  theta,
+  u,
+  v,
+  constraint = 'lead',
+  /** 0 = lead arm locked, 1 = trail arm locked, in between = handover blend. */
+  blend = constraint === 'trail' ? 1 : 0,
+  ratio = ARM_LOCK_RATIO,
+}) {
   const basis = torsoBasis(theta);
 
-  const solved = axisDistanceFor(constraint, u, v, ratio);
+  // Blend the two solutions rather than switching, so the hand path has no
+  // corner at release. They coincide at u = 0, which is exactly where release
+  // sits, so the blend costs almost nothing in arm straightness.
+  const byLead = axisDistanceFor('lead', u, v, ratio);
+  const byTrail = axisDistanceFor('trail', u, v, ratio);
+  const blended = byLead.distance + (byTrail.distance - byLead.distance) * blend;
+
+  // Blending moves the distance off each arm's own solution, so mid-handover one
+  // arm sits slightly longer than its target -- about 1 mm, but enough to trip the
+  // IK's overextension flag and paint the arm red. Cap it at the distance where
+  // NEITHER arm exceeds its actual length. The cap only ever binds inside the
+  // blend window, and only by that millimetre.
+  const cap = Math.min(
+    axisDistanceFor('lead', u, v, ARM_CAP_RATIO).distance,
+    axisDistanceFor('trail', u, v, ARM_CAP_RATIO).distance,
+  );
+  const solved = {
+    distance: Math.min(blended, cap),
+    reachable:
+      blend <= 0 ? byLead.reachable : blend >= 1 ? byTrail.reachable : byLead.reachable && byTrail.reachable,
+  };
   const hand = planeToWorld(basis, u, v, solved.distance);
   /** Where the drag point itself sits, on the rectangle. */
   const planePoint = planeToWorld(basis, u, v);

@@ -119,45 +119,50 @@ locked arm, and it is why the earlier version could not do both.
 
 **The rectangle is pinned to the address hand.** Its distance from the spine axis
 is P1's own solved distance, so P1 always lies exactly on the rectangle and its
-`⊥ offset` reads 0.0 cm — a standing self-check. Move P1, by dragging it or by
-changing the spine tilt, and the rectangle follows. In the 3D view the solved
-offset is the short blue segment from the drag point out to the hand. Across the
-reference swing `d` runs 0.23 → 0.47 m.
+`⊥ offset` reads 0.0 cm — a standing self-check. Drag P1 and the rectangle follows
+it. In the 3D view the solved offset is the short blue segment from the drag point
+out to the hand. Across the reference swing `d` runs 0.20 → 0.47 m.
 
-### Spine tilt and the address position
+### Spine tilt and the anchored address
 
-The **spine** slider sets forward tilt from 20° to 45°, standing in for club
-length: a wedge is addressed with more forward bend than a driver. It rebuilds the
-rig and snaps P1 to the natural address for that tilt.
+The **spine** slider sets forward tilt from 22° to 40°, standing in for club
+length: 40° is a short iron, 22° a driver. It rebuilds the rig and **leaves the
+camera exactly where you put it** — only flipping handedness moves the camera, and
+even then it mirrors the current view in Z rather than resetting, so your orbit
+distance and elevation survive.
 
-At `u = 0` the hand is equidistant from both shoulders, so a locked lead arm
-confines it to a circle of radius `r = √(target² − (w/2)²)` about the shoulder
-centre, in the sagittal plane — the one you see the setup in from the side.
-Parametrising that circle by the angle `φ` off plumb gives
+The address hand is **anchored** at a fixed point on the rectangle. At `u = 0` the
+hand is equidistant from both shoulders, so a locked lead arm confines it to a
+circle of radius `r = √(target² − (w/2)²)` about the shoulder centre in the
+sagittal plane. The anchor is the point on that circle where the arms hang plumb
+at the short-iron setup:
 
 ```
-v = −r·cos(tilt + φ)        distance = r·sin(tilt + φ)
+v = −r·cos(anchorTilt)        distance = r·sin(anchorTilt)
 ```
 
-which satisfies the arm-length constraint *identically*, so the address point is
-exactly reachable at any tilt — arm length lands on 0.66799 m for every value.
+**One consequence is worth being explicit about.** Anchoring `(u, v)` fixes the
+perpendicular distance too — the arm-length constraint ties all three together —
+so the rectangle, pinned to P1, does not move either. Changing spine tilt leaves
+the hand completely fixed *in the torso frame*. What changes is the world pose:
+the torso frame rotates and carries the whole arm assembly with it.
 
-`φ = 0` is a plumb hang, arms straight down in the side view, and holds at
-`ADDRESS.plumbTiltDeg` (38°) and steeper — the short clubs. Lifting the spine
-toward the long clubs opens `φ` and the hands ride above plumb:
+That still produces the effect you want, by a different route:
 
-| Tilt | φ | Ahead of plumb | Hand height |
+| Tilt | Hand height | Ahead of plumb | Hand-to-hip, horizontal |
 | --- | --- | --- | --- |
-| 20° (driver) | 8.1° | 8.9 cm | 0.862 m |
-| 26° | 5.4° | 6.0 cm | 0.838 m |
-| 32° (long iron, default) | 2.7° | 3.0 cm | 0.809 m |
-| 38° (plumb) | 0° | **0.00 cm** | 0.778 m |
-| 45° (wedge) | 0° | **0.00 cm** | 0.736 m |
+| 22° (driver) | 0.882 m | 19.6 cm | 39.1 cm |
+| 26° | 0.855 m | 15.3 cm | 38.2 cm |
+| 32° (long iron, default) | 0.816 m | 8.8 cm | 36.5 cm |
+| 40° (short iron, anchor) | 0.768 m | **0.0 cm** | 33.6 cm |
 
-Note that most of the height change across clubs comes from the shoulders
-themselves sitting higher as the spine lifts; `φ` is the extra reach on top. The
-8.8 cm sideways offset of the hands is separate again — that is the 8° lateral
-lean, and it is present at every tilt.
+So the hands sit **5.5 cm further from the body** with a driver than a short iron,
+and 11.4 cm higher, while `(u, v)` stays at (0.0, −48.5) and the axis distance at
+40.7 cm throughout. The arm length stays 0.667 m at every tilt — the anchor sits on
+the constraint circle, so it is always exactly reachable with no clamping.
+
+40° is the top of the slider on purpose: past the anchor the fixed arm would swing
+the hands *behind* the plumb line, which no one addresses a ball from.
 
 ### The arm rules
 
@@ -227,7 +232,7 @@ to a tour long-iron swing.
 
 | | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | address | 0.000 | 0.00 s | 0° | 0.0 | −52.1 | 36.1 |
+| P1 | address | 0.000 | 0.00 s | 0° | 0.0 | −48.5 | 40.7 |
 | P1.5 | takeaway | 0.110 | 0.16 s | +22° | −9.0 | −37.4 | 46.5 |
 | P2 | shaft parallel | 0.200 | 0.29 s | +40° | −19.0 | −26.4 | 46.5 |
 | P3 | lead arm parallel to ground | 0.320 | 0.46 s | +60° | −28.0 | −17.4 | 41.9 |
@@ -255,12 +260,53 @@ with it.
 **The positions are hand-authored from published swing positions, not motion
 capture.** Treat them as a well-shaped starting point you tune by dragging.
 
-### Interpolation: curves, and when to stop using them
+### Interpolation, and keeping the 3D path smooth
 
-Keyframes are joined with Catmull-Rom, which takes its tangent at a keyframe from
-that keyframe's *neighbours*. Two keyframes close together therefore inherit a
-tangent scaled to the distant ones, and the cubic between them detours — the
-distortion that shows up when points bunch.
+Four things had to be right before the world hand path flowed without a corner.
+Measured on the world path, the largest step in velocity direction anywhere went
+from **15.4° to 1.05°**, and the tightest corner from a 0.47 mm radius to a
+genuine, smooth reversal at the top.
+
+**1. Non-uniform tangents.** The familiar
+`(y[i+1] − y[i−1]) / (t[i+1] − t[i−1])` is the *uniform* Catmull-Rom formula, and
+using it on unequal knot spacing was a real bug, not a tuning choice. At the top,
+P3 and P5 sit only 9.6 cm apart while P4 stands 12–16 cm off both, over time spans
+of 0.20 and 0.08 — so the difference across P4 was small, the tangent collapsed,
+and the hand covered 1.6 cm in 80 ms before lurching away. A cusp. The correct
+generalisation weights each one-sided slope by the *opposite* interval, and
+reduces to the uniform formula when spacing is even.
+
+**2. Monotone limiting, for the torso angle only.** With correct tangents the
+angle track then overshot to **97°** on its way to a P4 that is *defined* as 90°.
+That is a correctness bug, since P4/P6/P9/P10 are pinned by the P-system, so the
+angle track gets a Fritsch-Carlson limiter: zero tangent at a local extremum,
+capped elsewhere. Max turn is now exactly 90.00° at P4 and −120.00° at P10.
+
+The hand track deliberately does *not* get it. There it would be actively
+harmful — `u` and `v` both reverse at the top, so zeroing both tangents stops the
+hand dead and gives a worse cusp than the one being fixed. The hand path is a free
+curve; it only has to be smooth.
+
+**3. C1 joins on straightened segments.** A straightened segment is a line, so its
+curved neighbour has to *arrive along that line* or the straight-line rule buys a
+clean chord at the price of a corner at each end — and at impact, the fastest part
+of the swing, that corner was the more visible artefact. Forcing the shared
+tangent to the chord slope took it from 223 to 22 rad/m.
+
+**4. A blended release.** Switching the locked arm at a single instant puts a
+corner in the path, because the perpendicular distance is solved from a different
+shoulder either side and its slope flips sign. `RELEASE_BLEND_T` smoothsteps the
+handover across ±0.025. It is nearly free: the two solutions coincide exactly at
+release, where `u = 0`. It does push one arm ~3 mm past its target mid-handover,
+which is why `ARM_LOCK_RATIO` is 0.995 rather than 0.997 — that leaves headroom
+under `REACH` so the safety cap in `solvePose` never has to bind (it stays as a
+guard for dragged poses, with 0.8 mm to spare).
+
+#### Straight segments
+
+Two keyframes close together still inherit a tangent scaled to their distant
+neighbours, and the cubic between them detours — the distortion that shows up when
+points bunch. Correct tangents reduce it but do not remove it.
 
 The cutoff is set from measurement. Comparing each segment's arc length against
 its own chord:

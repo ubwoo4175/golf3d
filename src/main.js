@@ -47,13 +47,16 @@ scrub.addEventListener('input', () =>
 speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 100 }));
 
 /**
- * Spine tilt stands in for club length. It rebuilds the rig and snaps P1 to the
- * natural address for the new tilt, which in turn drags the rectangle with it.
+ * Spine tilt stands in for club length.
+ *
+ * P1 is deliberately NOT touched: the address hand is anchored to a fixed point
+ * on the rectangle, so tilting only rotates the torso frame underneath it. The
+ * world positions all change, hence the emit to drop the cached path, but the
+ * camera is left exactly where you put it.
  */
 spineTiltInput.addEventListener('input', () => {
   const deg = Number(spineTiltInput.value);
   setSpineTilt(deg);
-  swing.applyNaturalAddress();
   swing.emit();
   store.set({ spineTilt: deg });
   sceneView.rebuildRig();
@@ -73,7 +76,7 @@ function applyHandedness(handedness) {
   store.set({ handedness });
   swing.emit(); // world positions changed, so drop the cached path
   planeView.layout(); // the 2D horizontal axis follows handedness
-  sceneView.rebuildRig();
+  sceneView.rebuildRig({ mirrorCamera: true });
 }
 
 handButton.addEventListener('click', () =>

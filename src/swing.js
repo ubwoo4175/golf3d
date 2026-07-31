@@ -26,7 +26,7 @@
  */
 
 import { rad } from './vec3.js';
-import { TIMING, CURVE } from './config.js';
+import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { solvePose, naturalAddress, axisDistanceFor } from './kinematics.js';
 
 export const PHASES = [
@@ -47,6 +47,18 @@ export const RELEASE_T = 0.725;
 
 /** Which arm is held straight at time t. */
 export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
+
+/**
+ * Handover weight at time t: 0 while the lead arm is locked, 1 once the trail
+ * arm is, smoothstepped across a short window centred on release so the hand
+ * path stays smooth through it. See `RELEASE_BLEND_T`.
+ */
+export function releaseBlendAt(t) {
+  const w = RELEASE_BLEND_T;
+  if (w <= 0) return t <= RELEASE_T ? 0 : 1;
+  const x = Math.min(1, Math.max(0, (t - (RELEASE_T - w)) / (2 * w)));
+  return x * x * (3 - 2 * x);
+}
 
 /**
  * The P-system, with shoulder rotation synced to a tour long-iron swing.
@@ -70,7 +82,7 @@ export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
 export const REFERENCE_KEYFRAMES = [
   // Backswing -- convex upward, so the hands rise early and the arc flattens.
   // P1's u and v are placeholders: `applyNaturalAddress` overwrites them from the
-  // current spine tilt on every reset.
+  // anchored address on every reset.
   { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.51, label: 'P1 address' },
   { t: 0.11, thetaDeg: 22, u: -0.09, v: -0.374, label: 'P1.5 takeaway' },
   { t: 0.2, thetaDeg: 40, u: -0.19, v: -0.264, label: 'P2 shaft parallel' },
@@ -89,23 +101,71 @@ export const REFERENCE_KEYFRAMES = [
 ];
 
 /**
- * Catmull-Rom tangent for a non-uniformly spaced scalar track.
- * Endpoints fall back to a one-sided difference.
+ * Catmull-Rom tangent for a NON-UNIFORMLY spaced scalar track.
+ *
+ * The familiar `(y[i+1] - y[i-1]) / (t[i+1] - t[i-1])` is the *uniform* formula.
+ * Applied to unequal knot spacing it misbehaves badly: when a keyframe juts out
+ * between two neighbours that sit close to each other, the difference across it
+ * is small, so the tangent collapses and the curve stalls at that keyframe and
+ * then lurches away -- a near-cusp. That is exactly what the top of the backswing
+ * is: P3 and P5 are 9.6 cm apart while P4 stands 12-16 cm off both of them, over
+ * time spans of 0.20 and 0.08.
+ *
+ * The correct generalisation weights each one-sided slope by the OPPOSITE
+ * interval, so the nearer neighbour dominates:
+ *
+ *     m = (dtNext * slopePrev + dtPrev * slopeNext) / (dtPrev + dtNext)
+ *
+ * It reduces to the uniform formula when the spacing is even, and it keeps the
+ * hand moving through the top instead of stalling. Endpoints fall back to a
+ * one-sided difference.
+ *
+ * `monotone` additionally applies the Fritsch-Carlson limiter, which forbids the
+ * cubic from overshooting the keyframe values it passes through: the tangent goes
+ * to zero at a local extremum and is capped elsewhere. That is used for the torso
+ * angle and ONLY for the torso angle, because those values are pinned by the
+ * P-system -- P4 IS 90 degrees of shoulder turn by definition, so interpolating
+ * through 97 on the way is wrong, not merely ugly.
+ *
+ * The hand track deliberately does not use it. There the limiter would be
+ * actively harmful: u and v both reverse at the top, so zeroing both tangents
+ * would stop the hand dead and produce a far worse cusp than the one being fixed.
+ * The hand path is a free curve and only needs to be smooth.
  */
-function tangent(keys, i, get) {
+function tangent(keys, i, get, monotone = false, isStraight = () => false) {
   const prev = keys[i - 1];
   const next = keys[i + 1];
   const cur = keys[i];
   if (!prev) return (get(next) - get(cur)) / (next.t - cur.t);
   if (!next) return (get(cur) - get(prev)) / (cur.t - prev.t);
-  return (get(next) - get(prev)) / (next.t - prev.t);
+  const dtPrev = cur.t - prev.t;
+  const dtNext = next.t - cur.t;
+  const slopePrev = (get(cur) - get(prev)) / dtPrev;
+  const slopeNext = (get(next) - get(cur)) / dtNext;
+
+  // A straightened segment is a line, so for the joint to stay smooth its curved
+  // neighbour has to arrive along that same line. Without this the straight-line
+  // rule buys a clean chord at the cost of a corner at each end of it -- which at
+  // impact, the fastest part of the swing, is the more visible artefact of the
+  // two. When both sides are straight the keyframe is a genuine polyline corner
+  // and neither neighbour consults this tangent at all.
+  const prevStraight = isStraight(i - 1);
+  const nextStraight = isStraight(i);
+  if (nextStraight && !prevStraight) return slopeNext;
+  if (prevStraight && !nextStraight) return slopePrev;
+
+  const m = (dtNext * slopePrev + dtPrev * slopeNext) / (dtPrev + dtNext);
+  if (!monotone) return m;
+  if (slopePrev * slopeNext <= 0) return 0; // local extremum: land on it exactly
+  const limit = 3 * Math.min(Math.abs(slopePrev), Math.abs(slopeNext));
+  return Math.sign(m) * Math.min(Math.abs(m), limit);
 }
 
-function hermite(keys, i, localT, span, get) {
+function hermite(keys, i, localT, span, get, monotone = false, isStraight = () => false) {
   const a = keys[i];
   const b = keys[i + 1];
-  const m0 = tangent(keys, i, get) * span;
-  const m1 = tangent(keys, i + 1, get) * span;
+  const m0 = tangent(keys, i, get, monotone, isStraight) * span;
+  const m1 = tangent(keys, i + 1, get, monotone, isStraight) * span;
   const t2 = localT * localT;
   const t3 = t2 * localT;
   return (
@@ -133,9 +193,9 @@ export class SwingPath {
   }
 
   /**
-   * Snap P1 to the natural address for the current spine tilt. Called on reset
-   * and whenever the tilt changes; dragging P1 overrides it until one of those
-   * happens.
+   * Snap P1 back to the anchored address. Called on reset only -- the anchor does
+   * not depend on spine tilt, so the tilt slider leaves P1 alone. Dragging P1
+   * overrides the anchor until the next reset.
    */
   applyNaturalAddress() {
     const { u, v } = naturalAddress();
@@ -210,17 +270,22 @@ export class SwingPath {
     const localT = (clamped - keys[i].t) / span;
 
     const lerp = (get) => get(keys[i]) + (get(keys[i + 1]) - get(keys[i])) * localT;
-    const interp = this.isStraightSegment(i)
-      ? lerp
-      : (get) => hermite(keys, i, localT, span, get);
+    const straight = this.isStraightSegment(i);
+    const isStraight = (index) =>
+      index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
+    const interp = (get, monotone = false) =>
+      straight ? lerp(get) : hermite(keys, i, localT, span, get, monotone, isStraight);
 
-    const thetaDeg = interp((k) => k.thetaDeg);
+    // The torso angle is pinned by the P-system, so it is interpolated without
+    // overshoot; the hand track is free and is interpolated for smoothness.
+    const thetaDeg = interp((k) => k.thetaDeg, true);
     return {
       theta: rad(thetaDeg),
       thetaDeg,
       u: interp((k) => k.u),
       v: interp((k) => k.v),
       constraint: constraintAt(clamped),
+      blend: releaseBlendAt(clamped),
     };
   }
 

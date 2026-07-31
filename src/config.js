@@ -51,12 +51,14 @@ export const BODY = {
 export const REACH = BODY.upperArm + BODY.forearm;
 
 /**
- * How extended a "straight" arm is held. Not 1.0 for two reasons: a real locked
- * arm keeps a few degrees of flex, and exactly 1.0 would sit on the reach
- * boundary where the IK flags an overextension. 0.997 reads as 8.9 degrees of
- * elbow flex.
+ * How extended a "straight" arm is held. Not 1.0 for three reasons: a real locked
+ * arm keeps a few degrees of flex; exactly 1.0 would sit on the reach boundary
+ * where the IK flags an overextension; and the release blend momentarily pushes
+ * one arm ~3 mm past its target, which needs headroom underneath REACH or the
+ * safety cap in `solvePose` starts binding and putting kinks back into the path.
+ * 0.995 reads as 11.5 degrees of elbow flex and leaves that headroom.
  */
-export const ARM_LOCK_RATIO = 0.997;
+export const ARM_LOCK_RATIO = 0.995;
 
 /**
  * The hand rectangle.
@@ -128,27 +130,42 @@ export const ELBOW_HINT = {
 };
 
 /**
- * The address position, as a function of forward spine tilt.
+ * The address position.
  *
- * At `plumbTiltDeg` and steeper -- the short clubs -- the arms hang plumb, i.e.
- * straight down in the side view. As the spine lifts toward the long clubs the
- * hands ride progressively above plumb, `liftPerDegree` degrees of arc about the
- * shoulders for every degree of lift. Both are measured in the sagittal plane;
- * the lateral spine lean displaces the hands sideways independently.
+ * The address hand is ANCHORED at a fixed point on the rectangle: it does not
+ * move when the spine tilt changes. The anchor is defined by the short-iron
+ * setup, `anchorTiltDeg`, where the arms hang plumb -- straight down in the side
+ * view. That single reference fixes (u, v) once and for all.
+ *
+ * Everything else follows from the torso frame rotating. Lift the spine toward
+ * the long clubs and the whole arm assembly lifts with it, so the hands rise and
+ * swing away from the body, while their position ON the rectangle stays put.
+ * The arm never changes relative to the torso; only the torso's angle changes.
  */
 export const ADDRESS = {
-  plumbTiltDeg: 38,
+  anchorTiltDeg: 40,
   /**
-   * 0.45 puts the hands ~9 cm ahead of the plumb line at the 20-degree driver
-   * end and ~3 cm at the long-iron default, which is the right order. Most of the
-   * height change across clubs comes from the shoulders themselves sitting higher
-   * as the spine lifts; this is the extra reach on top of that.
+   * Slider range for the forward spine tilt, degrees from vertical: driver at the
+   * shallow end, short iron at the steep end. The steep end is the anchor tilt on
+   * purpose -- past it the fixed anchor would swing the hands BEHIND the plumb
+   * line, which no one addresses a ball from.
    */
-  liftPerDegree: 0.45,
-  /** Slider range for the forward spine tilt, degrees from vertical. */
-  tiltMin: 20,
-  tiltMax: 45,
+  tiltMin: 22,
+  tiltMax: 40,
 };
+
+/**
+ * Half-width, in normalised time, of the window over which the straight-arm
+ * constraint hands from the lead arm to the trail arm at release.
+ *
+ * A hard switch puts a corner in the hand path: the perpendicular distance is
+ * solved from a different shoulder either side, and its slope flips sign. Real
+ * hand paths have no such corner, because in reality neither arm is exactly
+ * straight through the handover. Blending over a short window reproduces that.
+ * It is nearly free: the two solutions coincide exactly at release (u = 0), so
+ * the blend only ever departs from "straight" by a fraction of the gap.
+ */
+export const RELEASE_BLEND_T = 0.025;
 
 export const TIMING = {
   /**
