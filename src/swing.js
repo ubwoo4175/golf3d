@@ -27,7 +27,7 @@
 
 import { rad } from './vec3.js';
 import { TIMING, CURVE } from './config.js';
-import { solvePose } from './kinematics.js';
+import { solvePose, naturalAddress, axisDistanceFor } from './kinematics.js';
 
 export const PHASES = [
   { id: 'backswing', label: 'Backswing', start: 0, end: 0.52 },
@@ -69,9 +69,12 @@ export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
  */
 export const REFERENCE_KEYFRAMES = [
   // Backswing -- convex upward, so the hands rise early and the arc flattens.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.55, label: 'P1 address' },
-  { t: 0.16, thetaDeg: 22, u: -0.085, v: -0.425, label: 'P2 takeaway, shaft parallel' },
-  { t: 0.33, thetaDeg: 57, u: -0.195, v: -0.283, label: 'P3 lead arm parallel' },
+  // P1's u and v are placeholders: `applyNaturalAddress` overwrites them from the
+  // current spine tilt on every reset.
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.51, label: 'P1 address' },
+  { t: 0.11, thetaDeg: 22, u: -0.09, v: -0.374, label: 'P1.5 takeaway' },
+  { t: 0.2, thetaDeg: 40, u: -0.19, v: -0.264, label: 'P2 shaft parallel' },
+  { t: 0.32, thetaDeg: 60, u: -0.28, v: -0.174, label: 'P3 lead arm parallel' },
   { t: 0.52, thetaDeg: 90, u: -0.37, v: -0.09, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward, tracking under the backswing.
   { t: 0.6, thetaDeg: 45, u: -0.345, v: -0.245, label: 'P5 early downswing, lead arm parallel' },
@@ -125,7 +128,28 @@ export class SwingPath {
 
   reset(keyframes = REFERENCE_KEYFRAMES) {
     this.keys = keyframes.map((k) => ({ ...k }));
+    this.applyNaturalAddress();
     this.emit();
+  }
+
+  /**
+   * Snap P1 to the natural address for the current spine tilt. Called on reset
+   * and whenever the tilt changes; dragging P1 overrides it until one of those
+   * happens.
+   */
+  applyNaturalAddress() {
+    const { u, v } = naturalAddress();
+    this.keys[0].u = u;
+    this.keys[0].v = v;
+  }
+
+  /**
+   * Where the reference rectangle belongs: the address hand's own distance from
+   * the spine axis, so that P1 lies exactly on the rectangle.
+   */
+  addressAxisDistance() {
+    const p1 = this.keys[0];
+    return axisDistanceFor(constraintAt(p1.t), p1.u, p1.v).distance;
   }
 
   onChange(fn) {

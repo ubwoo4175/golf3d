@@ -61,24 +61,28 @@ export const ARM_LOCK_RATIO = 0.997;
 /**
  * The hand rectangle.
  *
- * The rectangle is torso-fixed and parallel to the spine axis, sitting at
- * `offset` from it. It is the surface you DRAG on, and the 2D view is a head-on
- * look at it -- but the hand itself no longer lies on it. The hand sits at a
- * perpendicular distance from the spine axis that is solved so the locked arm
- * stays straight (see `axisDistanceFor` in kinematics.js), so `offset` is now
- * only where the reference rectangle is drawn. It is set near the middle of the
- * distances the reference swing actually visits, so the solved offset swings
- * both in front of and behind the rectangle.
+ * The rectangle is torso-fixed and parallel to the spine axis. It is the surface
+ * you DRAG on, and the 2D view is a head-on look at it -- but the hand itself no
+ * longer lies on it. The hand sits at a perpendicular distance from the spine
+ * axis that is solved so the locked arm stays straight (see `axisDistanceFor` in
+ * kinematics.js).
+ *
+ * The rectangle is pinned to the address hand: its distance from the axis is
+ * P1's own solved distance, so P1 always lies exactly on the rectangle and its
+ * perpendicular offset reads 0. Move P1 -- by dragging it or by changing the
+ * spine tilt -- and the rectangle follows.
  *
  * In-plane coordinates are measured from the shoulder centre:
  *   u  along the shoulder line, positive toward the lead side
  *   v  along the spine axis, positive toward the head
  */
 export const PLANE = {
+  /**
+   * Initial rectangle distance. Immediately replaced: the rectangle is pinned to
+   * the address hand, so its distance is whatever P1's own solved distance is.
+   * See `SwingPath.addressAxisDistance`.
+   */
   offset: 0.33,
-  /** Slider range for the rectangle's distance from the spine axis. */
-  offsetMin: 0.15,
-  offsetMax: 0.55,
   uMin: -0.45,
   uMax: 0.45,
   vMin: -0.62,
@@ -121,6 +125,29 @@ export const CURVE = {
 export const ELBOW_HINT = {
   lead: { up: -1.0, fwd: -0.3, side: 0.1 },
   trail: { up: -1.0, fwd: -0.35, side: -0.2 },
+};
+
+/**
+ * The address position, as a function of forward spine tilt.
+ *
+ * At `plumbTiltDeg` and steeper -- the short clubs -- the arms hang plumb, i.e.
+ * straight down in the side view. As the spine lifts toward the long clubs the
+ * hands ride progressively above plumb, `liftPerDegree` degrees of arc about the
+ * shoulders for every degree of lift. Both are measured in the sagittal plane;
+ * the lateral spine lean displaces the hands sideways independently.
+ */
+export const ADDRESS = {
+  plumbTiltDeg: 38,
+  /**
+   * 0.45 puts the hands ~9 cm ahead of the plumb line at the 20-degree driver
+   * end and ~3 cm at the long-iron default, which is the right order. Most of the
+   * height change across clubs comes from the shoulders themselves sitting higher
+   * as the spine lifts; this is the extra reach on top of that.
+   */
+  liftPerDegree: 0.45,
+  /** Slider range for the forward spine tilt, degrees from vertical. */
+  tiltMin: 20,
+  tiltMax: 45,
 };
 
 export const TIMING = {

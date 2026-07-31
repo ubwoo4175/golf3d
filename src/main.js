@@ -9,7 +9,7 @@
 
 import { TIMING, REACH } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
-import { setHandedness, setPlaneOffset, getRig } from './kinematics.js';
+import { setHandedness, setSpineTilt, setPlaneOffset, getRig } from './kinematics.js';
 import { Store } from './state.js';
 import { PlaneView } from './view2d.js';
 import { SceneView } from './view3d.js';
@@ -30,8 +30,15 @@ const playButton = $('play');
 const scrub = $('scrub');
 const speed = $('speed');
 const handButton = $('handedness');
-const planeOffsetInput = $('plane-offset');
-const planeOffsetOut = $('plane-offset-out');
+const spineTiltInput = $('spine-tilt');
+const spineTiltOut = $('spine-tilt-out');
+
+// The rectangle is pinned to the address hand, so it follows P1 wherever P1 goes
+// -- dragged, reset, or moved by the spine slider. Registered before the view's
+// own listener so the offset is current by the time the paths refresh.
+const syncPlaneToAddress = () => setPlaneOffset(swing.addressAxisDistance());
+swing.onChange(syncPlaneToAddress);
+syncPlaneToAddress();
 
 playButton.addEventListener('click', () => store.set({ playing: !store.state.playing }));
 scrub.addEventListener('input', () =>
@@ -39,14 +46,17 @@ scrub.addEventListener('input', () =>
 );
 speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 100 }));
 
-// Moves the reference rectangle only. The hand's own distance from the spine
-// axis is solved from the arm rules, so the swing itself is unaffected and the
-// cached path needs no invalidation -- what changes is the rectangle's position
-// and therefore the reported perpendicular offset.
-planeOffsetInput.addEventListener('input', () => {
-  const offset = Number(planeOffsetInput.value) / 100;
-  setPlaneOffset(offset);
-  store.set({ planeOffset: offset });
+/**
+ * Spine tilt stands in for club length. It rebuilds the rig and snaps P1 to the
+ * natural address for the new tilt, which in turn drags the rectangle with it.
+ */
+spineTiltInput.addEventListener('input', () => {
+  const deg = Number(spineTiltInput.value);
+  setSpineTilt(deg);
+  swing.applyNaturalAddress();
+  swing.emit();
+  store.set({ spineTilt: deg });
+  sceneView.rebuildRig();
 });
 
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
@@ -63,7 +73,7 @@ function applyHandedness(handedness) {
   store.set({ handedness });
   swing.emit(); // world positions changed, so drop the cached path
   planeView.layout(); // the 2D horizontal axis follows handedness
-  sceneView.applyHandedness();
+  sceneView.rebuildRig();
 }
 
 handButton.addEventListener('click', () =>
@@ -144,7 +154,8 @@ store.subscribe((state) => {
   const sides = getRig().sides;
   handButton.textContent = `${state.handedness === 'right' ? 'Right' : 'Left'}-handed`;
   handButton.title = `Lead arm is the ${sides.lead}. Click or press H to flip.`;
-  planeOffsetOut.textContent = (state.planeOffset * 100).toFixed(0);
+  spineTiltOut.textContent = `${state.spineTilt}°`;
+  spineTiltInput.value = String(state.spineTilt);
 });
 
 let last = performance.now();

@@ -186,10 +186,11 @@ export class SceneView {
   }
 
   /**
-   * Rebuild everything that depends on handedness and mirror the camera, so the
-   * new golfer is seen from the equivalent viewpoint.
+   * Rebuild everything that depends on the rig -- handedness and spine tilt --
+   * and reframe the camera, so the new golfer is seen from the equivalent
+   * viewpoint.
    */
-  applyHandedness() {
+  rebuildRig() {
     for (const child of [...this.staticGroup.children]) {
       this.staticGroup.remove(child);
       child.geometry?.dispose();
@@ -213,8 +214,9 @@ export class SceneView {
 
   /**
    * Ground, ball, target line, legs and the spine axis. Everything here is
-   * static during a swing but mirrored by handedness, so it goes in
-   * `staticGroup` and is rebuilt by `applyHandedness`.
+   * static during a swing but depends on the rig -- mirrored by handedness, and
+   * the axis re-aimed by spine tilt -- so it goes in `staticGroup` and is rebuilt
+   * by `rebuildRig`.
    */
   buildStatic() {
     const group = this.staticGroup;

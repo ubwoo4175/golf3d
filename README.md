@@ -95,8 +95,11 @@ either way, so the lead shoulder rides high for both. Neither does `u` — it is
 always positive toward the lead side, which is why the keyframes are untouched by
 a flip and the same swing is simply mirrored onto the other side.
 
-The 2D view stays face-on by flipping only its horizontal *screen* mapping, so a
-right-hander's lead side (their left) appears on your right.
+The 2D view is drawn from the golfer's **own** point of view — as if they were
+looking down at their own hands, not as if you were facing them. So a
+right-hander's lead side is their left and appears on the *left* of the screen,
+and a left-hander's mirrors it. Only the horizontal screen mapping flips; `u` is
+always positive toward the lead side internally.
 
 ### The rectangle and the automatic perpendicular axis
 
@@ -114,14 +117,47 @@ every `(u, v)` inside a **disk** of radius `target` — an area, where the old f
 distance left only a circle. That is what makes free dragging compatible with a
 locked arm, and it is why the earlier version could not do both.
 
-`PLANE.offset` is now only where the reference rectangle is *drawn*, and the
-**rect ⊥** slider moves it between 15 and 55 cm from the spine axis. Moving it
-changes nothing about the swing: the hand's own distance is solved from the arm
-rules, so every joint and the whole path stay put and only the reported
-`⊥ offset` changes. It is a way to look at the same motion against a nearer or
-further reference plane. In the 3D view the solved offset is the short blue
-segment from the drag point out to the hand. Across the reference swing `d` runs
-0.23 → 0.46 m.
+**The rectangle is pinned to the address hand.** Its distance from the spine axis
+is P1's own solved distance, so P1 always lies exactly on the rectangle and its
+`⊥ offset` reads 0.0 cm — a standing self-check. Move P1, by dragging it or by
+changing the spine tilt, and the rectangle follows. In the 3D view the solved
+offset is the short blue segment from the drag point out to the hand. Across the
+reference swing `d` runs 0.23 → 0.47 m.
+
+### Spine tilt and the address position
+
+The **spine** slider sets forward tilt from 20° to 45°, standing in for club
+length: a wedge is addressed with more forward bend than a driver. It rebuilds the
+rig and snaps P1 to the natural address for that tilt.
+
+At `u = 0` the hand is equidistant from both shoulders, so a locked lead arm
+confines it to a circle of radius `r = √(target² − (w/2)²)` about the shoulder
+centre, in the sagittal plane — the one you see the setup in from the side.
+Parametrising that circle by the angle `φ` off plumb gives
+
+```
+v = −r·cos(tilt + φ)        distance = r·sin(tilt + φ)
+```
+
+which satisfies the arm-length constraint *identically*, so the address point is
+exactly reachable at any tilt — arm length lands on 0.66799 m for every value.
+
+`φ = 0` is a plumb hang, arms straight down in the side view, and holds at
+`ADDRESS.plumbTiltDeg` (38°) and steeper — the short clubs. Lifting the spine
+toward the long clubs opens `φ` and the hands ride above plumb:
+
+| Tilt | φ | Ahead of plumb | Hand height |
+| --- | --- | --- | --- |
+| 20° (driver) | 8.1° | 8.9 cm | 0.862 m |
+| 26° | 5.4° | 6.0 cm | 0.838 m |
+| 32° (long iron, default) | 2.7° | 3.0 cm | 0.809 m |
+| 38° (plumb) | 0° | **0.00 cm** | 0.778 m |
+| 45° (wedge) | 0° | **0.00 cm** | 0.736 m |
+
+Note that most of the height change across clubs comes from the shoulders
+themselves sitting higher as the spine lifts; `φ` is the extra reach on top. The
+8.8 cm sideways offset of the hands is separate again — that is the 8° lateral
+lean, and it is present at every tilt.
 
 ### The arm rules
 
@@ -189,23 +225,26 @@ verified by a chord test, which is independent of traversal direction.
 `REFERENCE_KEYFRAMES` in `src/swing.js` — 11 keyframes over `t ∈ [0, 1]`, synced
 to a tour long-iron swing.
 
-| | Position | t | time | shoulders |
-| --- | --- | --- | --- | --- |
-| P1 | address | 0.000 | 0.00 s | 0° |
-| P2 | takeaway, shaft parallel | 0.160 | 0.23 s | +22° |
-| P3 | lead arm parallel to ground | 0.330 | 0.48 s | +57° |
-| P4 | top of backswing | 0.520 | 0.75 s | **+90°** |
-| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° |
-| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** |
-| P7 | impact | 0.690 | 1.00 s | −35° |
-| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° |
-| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° |
-| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** |
-| P10 | finish | 1.000 | 1.45 s | **−120°** |
+| | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P1 | address | 0.000 | 0.00 s | 0° | 0.0 | −52.1 | 36.1 |
+| P1.5 | takeaway | 0.110 | 0.16 s | +22° | −9.0 | −37.4 | 46.5 |
+| P2 | shaft parallel | 0.200 | 0.29 s | +40° | −19.0 | −26.4 | 46.5 |
+| P3 | lead arm parallel to ground | 0.320 | 0.46 s | +60° | −28.0 | −17.4 | 41.9 |
+| P4 | top of backswing | 0.520 | 0.75 s | **+90°** | −37.0 | −9.0 | 31.9 |
+| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° | −34.5 | −24.5 | 28.0 |
+| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** | −27.0 | −40.5 | 22.8 |
+| P7 | impact | 0.690 | 1.00 s | −35° | −5.5 | −52.5 | 31.7 |
+| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° | **0.0** | −47.5 | 42.0 |
+| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° | +11.5 | −40.0 | 42.5 |
+| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** | +21.5 | −23.5 | 45.9 |
+| P10 | finish | 1.000 | 1.45 s | **−120°** | +31.0 | +9.0 | 41.0 |
 
 The four bold angles are not free parameters — P4, P6, P9 and P10 are *defined*
 by their shoulder rotation, so they are pinned exactly and the rest interpolate
-between them.
+between them. P7.5's `u = 0` is forced by geometry, not chosen. P1's `u` and `v`
+are derived from the spine tilt and are the values for the 32° default; the axis
+distance column is solved, never authored.
 
 Timing is a real constraint, not decoration. Backswing 0.75 s against a 0.25 s
 downswing is the ~3:1 tour tempo, and it puts peak torso rotation at **748°/s**
@@ -250,7 +289,7 @@ direction. That is the transition float, and it is 0.9 cm.
 | Space | Play / pause |
 | ← / → | Step keyframe |
 | H, or the handedness button | Flip right- / left-handed |
-| rect ⊥ slider | Move the reference rectangle. Visual only — the swing does not change. |
+| spine slider | Forward tilt 20–45°, standing in for club length. Resets P1 to the natural address, which drags the rectangle with it. |
 | Drag / scroll on 3D | Orbit / zoom |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference

@@ -3,7 +3,7 @@
  * the 2D plane and the 3D scene synchronised: there is only ever one `t`.
  */
 
-import { TIMING, DEFAULT_HANDEDNESS, PLANE } from './config.js';
+import { TIMING, DEFAULT_HANDEDNESS, BODY } from './config.js';
 
 export class Store {
   constructor(swing) {
@@ -16,8 +16,8 @@ export class Store {
       dragging: null,
       /** 'right' | 'left'. Mirrors the whole rig; see kinematics.setHandedness. */
       handedness: DEFAULT_HANDEDNESS,
-      /** Where the reference rectangle is drawn, from the spine axis. Visual only. */
-      planeOffset: PLANE.offset,
+      /** Forward spine tilt in degrees; stands in for club length. */
+      spineTilt: BODY.spineTiltForwardDeg,
       showPath: true,
       showPlane: true,
       showLocalPath: true,

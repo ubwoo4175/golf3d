@@ -6,10 +6,11 @@
  * the shoulder/elbow line, vertical is the spine axis (v, positive toward the
  * head).
  *
- * The horizontal axis follows handedness so the view is always face-on: the lead
- * side is a right-hander's left, which appears on the viewer's right, and the
- * mirror of that for a left-hander. Internally u is always positive toward the
- * lead side; only the mapping to screen x flips.
+ * The horizontal axis is the golfer's OWN point of view -- as if looking down at
+ * their own hands -- not a face-on view of them. So a right-hander's lead side is
+ * their left and appears on the LEFT of the screen, and the mirror of that for a
+ * left-hander. Internally u is always positive toward the lead side; only the
+ * mapping to screen x flips.
  *
  * The hand does not lie on the rectangle -- its perpendicular distance is solved
  * from the arm rules -- so this view is an orthographic projection along the
@@ -67,7 +68,9 @@ export class PlaneView {
     const scale = Math.min((this.w - 2 * MARGIN) / spanU, (this.h - 2 * MARGIN) / spanV);
     const uCenter = (PLANE.uMin + PLANE.uMax) / 2;
     const vCenter = (PLANE.vMin + PLANE.vMax) / 2;
-    const flip = getRig().H;
+    // Negated handedness: +H would put the lead side on the right, which is the
+    // face-on view of the golfer. Looking out through their own eyes mirrors it.
+    const flip = -getRig().H;
     // Anchor on the rectangle's centre so the flip is exact for any bounds, and
     // invert screen y so +v points up.
     this.viewport = {

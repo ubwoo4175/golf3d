@@ -15,7 +15,15 @@
  */
 
 import * as V from './vec3.js';
-import { BODY, PLANE, REACH, ARM_LOCK_RATIO, ELBOW_HINT, DEFAULT_HANDEDNESS } from './config.js';
+import {
+  BODY,
+  PLANE,
+  REACH,
+  ARM_LOCK_RATIO,
+  ELBOW_HINT,
+  ADDRESS,
+  DEFAULT_HANDEDNESS,
+} from './config.js';
 
 /** Sign convention: theta > 0 is the backswing (torso turns away from target). */
 export const BACKSWING_SIGN = 1;
@@ -46,6 +54,21 @@ export const ROLE_SIDES = {
 let rig;
 
 /**
+ * Forward spine tilt in degrees. Runtime state, driven by the spine slider: it
+ * stands for club length, since a wedge is addressed with more forward bend than
+ * a driver.
+ */
+let spineTiltForwardDeg = BODY.spineTiltForwardDeg;
+
+export const getSpineTilt = () => spineTiltForwardDeg;
+
+/** Set the forward tilt and rebuild the rig around it. */
+export function setSpineTilt(deg) {
+  spineTiltForwardDeg = deg;
+  return setHandedness(rig.handedness);
+}
+
+/**
  * (side, up, cross(side, up)) is a right-handed triple whose third vector points
  * +Z at address. That is the chest normal for a righty; a lefty faces the other
  * way, hence the H factor.
@@ -63,7 +86,7 @@ const chestNormal = (side, up, H) => V.scale(V.normalize(V.cross(side, up)), H);
  */
 export function setHandedness(handedness) {
   const H = handedness === 'left' ? -1 : 1;
-  const forward = V.rad(BODY.spineTiltForwardDeg) * H;
+  const forward = V.rad(spineTiltForwardDeg) * H;
   const lateral = V.rad(BODY.spineTiltLateralDeg);
   const tilt = (p) => V.rotateZ(V.rotateX(p, forward), lateral);
 
@@ -100,6 +123,37 @@ export const setPlaneOffset = (distance) => {
 };
 
 export const getPlaneOffset = () => planeOffset;
+
+/**
+ * The address hand position for the current spine tilt, in plane coordinates.
+ *
+ * At u = 0 the hand is equidistant from both shoulders, so a locked lead arm
+ * confines it to a circle of radius
+ *     r = sqrt(target^2 - (shoulderWidth / 2)^2)
+ * about the shoulder centre, in the plane spanned by the spine axis and the chest
+ * normal -- the sagittal plane you see the golfer's setup in from the side.
+ * Parametrising that circle by the angle `phi` off plumb gives
+ *     v = -r * cos(tilt + phi)      distance = r * sin(tilt + phi)
+ * which satisfies the arm-length constraint identically, so the address point is
+ * always exactly reachable however the tilt is set.
+ *
+ * phi = 0 is a plumb hang -- the arms straight down in the side view -- and holds
+ * at `ADDRESS.plumbTiltDeg` and steeper. Lifting the spine toward the long clubs
+ * opens phi, raising the hands above plumb.
+ */
+export function naturalAddress() {
+  const target = ARM_LOCK_RATIO * REACH;
+  const half = BODY.shoulderWidth / 2;
+  const radius = Math.sqrt(Math.max(0, target * target - half * half));
+  const lift = Math.max(0, ADDRESS.plumbTiltDeg - spineTiltForwardDeg) * ADDRESS.liftPerDegree;
+  const angle = V.rad(spineTiltForwardDeg + lift);
+  return {
+    u: 0,
+    v: -radius * Math.cos(angle),
+    axisDistance: radius * Math.sin(angle),
+    liftDeg: lift,
+  };
+}
 
 /**
  * Orthonormal torso basis after rotating `theta` radians about the spine axis.
