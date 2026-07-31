@@ -19,10 +19,14 @@
  * impact and only reaches full length at release.
  *
  * THE PATH SHAPE
- *   backswing        convex upward: bows ABOVE the chord from address to the top
+ *   takeaway         a straight vertical line: u holds at 0 while v rises
+ *   backswing        convex upward: bows ABOVE the chord from the takeaway to the top
  *   downswing        convex downward, and so drops below the backswing -- the
  *                    shallowing loop
- *   follow-through   convex downward
+ *   follow-through   slightly convex upward
+ *
+ * Those four together are what make the WORLD path flow: see the interpolation
+ * notes in the README for the measurements.
  */
 
 import { rad } from './vec3.js';
@@ -80,25 +84,30 @@ export function releaseBlendAt(t) {
  * permit nothing else, because the free arm would have to be longer than it is.
  */
 export const REFERENCE_KEYFRAMES = [
-  // Backswing -- convex upward, so the hands rise early and the arc flattens.
-  // P1's u and v are placeholders: `applyNaturalAddress` overwrites them from the
-  // anchored address on every reset.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.51, label: 'P1 address' },
-  { t: 0.11, thetaDeg: 22, u: -0.09, v: -0.374, label: 'P1.5 takeaway' },
-  { t: 0.2, thetaDeg: 40, u: -0.19, v: -0.264, label: 'P2 shaft parallel' },
-  { t: 0.32, thetaDeg: 60, u: -0.28, v: -0.174, label: 'P3 lead arm parallel' },
-  { t: 0.52, thetaDeg: 90, u: -0.37, v: -0.09, label: 'P4 top, shoulders 90° away' },
-  // Downswing -- convex downward, tracking under the backswing.
-  { t: 0.6, thetaDeg: 45, u: -0.345, v: -0.245, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.655, thetaDeg: 0, u: -0.27, v: -0.405, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.69, thetaDeg: -35, u: -0.055, v: -0.525, label: 'P7 impact' },
+  // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
+  // both arms stay equally straight through it: a one-piece takeaway. The
+  // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.45, label: 'P1 address' },
+  { t: 0.11, thetaDeg: 22, u: 0.0, v: -0.406, label: 'P1.5 takeaway' },
+  // Backswing -- convex upward.
+  { t: 0.2, thetaDeg: 40, u: -0.059, v: -0.252, label: 'P2 shaft parallel' },
+  { t: 0.32, thetaDeg: 60, u: -0.156, v: -0.114, label: 'P3 lead arm parallel' },
+  { t: 0.52, thetaDeg: 90, u: -0.237, v: -0.015, label: 'P4 top, shoulders 90° away' },
+  // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
+  // keep drifting away from the target while the torso has already started down.
+  // That is the transition float, and it is what opens the loop at the top --
+  // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
+  { t: 0.6, thetaDeg: 45, u: -0.287, v: -0.21, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.655, thetaDeg: 0, u: -0.23, v: -0.332, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.69, thetaDeg: -35, u: -0.131, v: -0.384, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.475, label: 'P7.5 release, both arms straight' },
-  // Follow-through -- convex downward.
-  { t: 0.775, thetaDeg: -72, u: 0.115, v: -0.4, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.85, thetaDeg: -90, u: 0.215, v: -0.235, label: 'P9 shoulders 90° to target' },
-  { t: 1.0, thetaDeg: -120, u: 0.31, v: 0.09, label: 'P10 finish, shoulders 120°' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.354, label: 'P7.5 release, both arms straight' },
+  // Follow-through -- slightly convex UPWARD, unlike the downswing.
+  { t: 0.775, thetaDeg: -72, u: 0.04, v: -0.265, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.85, thetaDeg: -90, u: 0.128, v: -0.117, label: 'P9 shoulders 90° to target' },
+  { t: 1.0, thetaDeg: -120, u: 0.22, v: 0.002, label: 'P10 finish, shoulders 120°' },
 ];
+
 
 /**
  * Catmull-Rom tangent for a NON-UNIFORMLY spaced scalar track.

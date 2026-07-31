@@ -143,7 +143,13 @@ export const ELBOW_HINT = {
  * The arm never changes relative to the torso; only the torso's angle changes.
  */
 export const ADDRESS = {
-  anchorTiltDeg: 40,
+  /**
+   * Set from the saved default address rather than picked: P1 sits at
+   * v = -0.450, and the anchor circle puts that at a plumb hang of 44.7 degrees.
+   * Drop it back to 40 to put plumb at the short-iron setup instead, which moves
+   * the address hand 3.5 cm down the rectangle.
+   */
+  anchorTiltDeg: 44.7,
   /**
    * Slider range for the forward spine tilt, degrees from vertical: driver at the
    * shallow end, short iron at the steep end. The steep end is the anchor tilt on
@@ -151,7 +157,7 @@ export const ADDRESS = {
    * line, which no one addresses a ball from.
    */
   tiltMin: 22,
-  tiltMax: 40,
+  tiltMax: 45,
 };
 
 /**

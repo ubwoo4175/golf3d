@@ -121,12 +121,12 @@ locked arm, and it is why the earlier version could not do both.
 is P1's own solved distance, so P1 always lies exactly on the rectangle and its
 `⊥ offset` reads 0.0 cm — a standing self-check. Drag P1 and the rectangle follows
 it. In the 3D view the solved offset is the short blue segment from the drag point
-out to the hand. Across the reference swing `d` runs 0.20 → 0.47 m.
+out to the hand. Across the reference swing `d` runs 0.37 → 0.57 m.
 
 ### Spine tilt and the anchored address
 
-The **spine** slider sets forward tilt from 22° to 40°, standing in for club
-length: 40° is a short iron, 22° a driver. It rebuilds the rig and **leaves the
+The **spine** slider sets forward tilt from 22° to 45°, standing in for club
+length: 22° is a driver, 40° a short iron. It rebuilds the rig and **leaves the
 camera exactly where you put it** — only flipping handedness moves the camera, and
 even then it mirrors the current view in Z rather than resetting, so your orbit
 distance and elevation survive.
@@ -135,7 +135,7 @@ The address hand is **anchored** at a fixed point on the rectangle. At `u = 0` t
 hand is equidistant from both shoulders, so a locked lead arm confines it to a
 circle of radius `r = √(target² − (w/2)²)` about the shoulder centre in the
 sagittal plane. The anchor is the point on that circle where the arms hang plumb
-at the short-iron setup:
+at `ADDRESS.anchorTiltDeg`:
 
 ```
 v = −r·cos(anchorTilt)        distance = r·sin(anchorTilt)
@@ -151,18 +151,21 @@ That still produces the effect you want, by a different route:
 
 | Tilt | Hand height | Ahead of plumb | Hand-to-hip, horizontal |
 | --- | --- | --- | --- |
-| 22° (driver) | 0.882 m | 19.6 cm | 39.1 cm |
-| 26° | 0.855 m | 15.3 cm | 38.2 cm |
-| 32° (long iron, default) | 0.816 m | 8.8 cm | 36.5 cm |
-| 40° (short iron, anchor) | 0.768 m | **0.0 cm** | 33.6 cm |
+| 22° (driver) | 0.899 m | 24.4 cm | 43.9 cm |
+| 26° | 0.869 m | 20.3 cm | 43.1 cm |
+| 32° (long iron, default) | 0.825 m | 13.9 cm | 41.5 cm |
+| 40° (short iron) | 0.770 m | 5.2 cm | 38.7 cm |
+| 44.7° (anchor) | 0.740 m | **0.0 cm** | 36.8 cm |
 
-So the hands sit **5.5 cm further from the body** with a driver than a short iron,
-and 11.4 cm higher, while `(u, v)` stays at (0.0, −48.5) and the axis distance at
-40.7 cm throughout. The arm length stays 0.667 m at every tilt — the anchor sits on
+So the hands sit **7.1 cm further from the body** with a driver than a short iron,
+and 12.9 cm higher, while `(u, v)` stays at (0.0, −45.0) and the axis distance at
+44.5 cm throughout. The arm length stays 0.667 m at every tilt — the anchor sits on
 the constraint circle, so it is always exactly reachable with no clamping.
 
-40° is the top of the slider on purpose: past the anchor the fixed arm would swing
-the hands *behind* the plumb line, which no one addresses a ball from.
+`anchorTiltDeg` is 44.7° because that is where the *saved default address* puts
+the plumb line, not because a short iron is addressed that steeply — see the note
+in `config.js`. Set it to 40 to put plumb at the short iron instead; that moves the
+address hand 3.5 cm down the rectangle and shifts the whole table with it.
 
 ### The arm rules
 
@@ -218,12 +221,50 @@ near full extension, so that really is what 99.7% of a 32 + 35 cm arm looks like
 
 | Phase | Shape |
 | --- | --- |
-| Backswing | convex **upward** — bows above the chord from address to the top |
-| Downswing | convex downward, so it tracks 13–22 cm *below* the backswing |
-| Follow-through | convex downward |
+| Takeaway P1 → P1.5 | a straight vertical line — `u` holds at exactly 0 |
+| Backswing P1.5 → P4 | convex **upward** |
+| Downswing P4 → P7 | convex **downward**, tracking 25–36 cm *below* the backswing |
+| Follow-through P7.5 → P10 | slightly convex **upward** |
 
-Backswing high and downswing low is the classic shallowing loop. Convexity is
-verified by a chord test, which is independent of traversal direction.
+Convexity is checked with a chord test, which is independent of traversal
+direction. The downswing is the exception: `u` is non-monotonic there (P5 sits
+5 cm *further back* than P4), so a chord test does not apply and the turn
+direction of the polyline is used instead — it turns one way only.
+
+Two of these have consequences beyond looking right:
+
+- **The takeaway holds `u = 0`.** At `u = 0` the hand is equidistant from both
+  shoulders, so *both* arms are equally straight. The takeaway is therefore
+  one-piece by construction, not by tuning. It is also 4.4 cm long, under
+  `CURVE.straightBelow`, so it comes out straight-joined for free.
+- **P5 sits behind P4.** This is what opens the loop at the top, and it is the
+  real reason the 3D path flows — see below.
+
+### Why this shape gives a smooth 3D path
+
+The four convexity properties do **not**, by themselves, imply a smooth world
+path; 2D convexity and 3D smoothness are independent. What actually does it is a
+structural property that happens to come with this shape:
+
+```
+u through the top:  P3 −0.156  →  P4 −0.237  →  P5 −0.287     monotonic
+v through the top:  P3 −0.114  →  P4 −0.015  →  P5 −0.210     reverses at P4
+```
+
+Only **one** of the two coordinates turns at P4, so `du/dt ≠ 0` there and the hand
+cannot stop. `u` does not reverse until t = 0.593, well after the top — the
+transition float, the hands still drifting back while the torso has started down.
+
+In the previous default both coordinates reversed at P4 together, which forced the
+hand velocity toward zero and pinched the loop into a near-point. Measured:
+
+| | previous default | this shape |
+| --- | --- | --- |
+| Kink spikes in the world path | 1 | **none** |
+| Largest velocity-direction step | 1.05° | 1.22° |
+| Minimum hand speed at the top | 0.685 m/s | **0.964 m/s** |
+| Tightest radius at the top | 0.9 cm | **1.6 cm** |
+| Peak hand speed | 10.76 m/s | **7.90 m/s** |
 
 ### The P-system and shoulder rotation
 
@@ -232,18 +273,18 @@ to a tour long-iron swing.
 
 | | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | address | 0.000 | 0.00 s | 0° | 0.0 | −48.5 | 40.7 |
-| P1.5 | takeaway | 0.110 | 0.16 s | +22° | −9.0 | −37.4 | 46.5 |
-| P2 | shaft parallel | 0.200 | 0.29 s | +40° | −19.0 | −26.4 | 46.5 |
-| P3 | lead arm parallel to ground | 0.320 | 0.46 s | +60° | −28.0 | −17.4 | 41.9 |
-| P4 | top of backswing | 0.520 | 0.75 s | **+90°** | −37.0 | −9.0 | 31.9 |
-| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° | −34.5 | −24.5 | 28.0 |
-| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** | −27.0 | −40.5 | 22.8 |
-| P7 | impact | 0.690 | 1.00 s | −35° | −5.5 | −52.5 | 31.7 |
-| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° | **0.0** | −47.5 | 42.0 |
-| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° | +11.5 | −40.0 | 42.5 |
-| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** | +21.5 | −23.5 | 45.9 |
-| P10 | finish | 1.000 | 1.45 s | **−120°** | +31.0 | +9.0 | 41.0 |
+| P1 | address | 0.000 | 0.00 s | 0° | **0.0** | −45.0 | 44.5 |
+| P1.5 | takeaway | 0.110 | 0.16 s | +22° | **0.0** | −40.6 | 48.5 |
+| P2 | shaft parallel | 0.200 | 0.29 s | +40° | −5.9 | −25.2 | 55.5 |
+| P3 | lead arm parallel to ground | 0.320 | 0.46 s | +60° | −15.6 | −11.4 | 54.5 |
+| P4 | top of backswing | 0.520 | 0.75 s | **+90°** | −23.7 | −1.5 | 49.4 |
+| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° | −28.7 | −21.0 | 39.2 |
+| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** | −23.0 | −33.2 | 37.5 |
+| P7 | impact | 0.690 | 1.00 s | −35° | −13.1 | −38.4 | 42.5 |
+| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° | **0.0** | −35.4 | 52.4 |
+| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° | +4.0 | −26.5 | 55.8 |
+| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** | +12.8 | −11.7 | 56.3 |
+| P10 | finish | 1.000 | 1.45 s | **−120°** | +22.0 | +0.2 | 50.9 |
 
 The four bold angles are not free parameters — P4, P6, P9 and P10 are *defined*
 by their shoulder rotation, so they are pinned exactly and the rest interpolate
