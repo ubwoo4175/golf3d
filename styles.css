@@ -183,12 +183,17 @@ button.primary {
   letter-spacing: 0.05em;
 }
 
+/* Shrinkable, unlike `flex: 0 0`: a range input carries a browser default
+   min-width, so a non-shrinking track lets its own content overflow the box and
+   spill the value readout past the footer edge. */
 .slider.narrow {
-  flex: 0 0 190px;
+  flex: 0 1 200px;
+  min-width: 120px;
 }
 
 input[type='range'] {
   flex: 1;
+  min-width: 0;
   accent-color: var(--accent);
 }
 
@@ -282,4 +287,12 @@ button.toggle-button {
   .pane {
     height: 58vh;
   }
+}
+
+.slider output {
+  flex: 0 0 auto;
+  min-width: 18px;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: var(--text);
+  text-align: right;
 }

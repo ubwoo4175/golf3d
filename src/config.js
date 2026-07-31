@@ -76,10 +76,40 @@ export const ARM_LOCK_RATIO = 0.997;
  */
 export const PLANE = {
   offset: 0.33,
+  /** Slider range for the rectangle's distance from the spine axis. */
+  offsetMin: 0.15,
+  offsetMax: 0.55,
   uMin: -0.45,
   uMax: 0.45,
   vMin: -0.62,
   vMax: 0.45,
+};
+
+/**
+ * Path interpolation.
+ *
+ * Catmull-Rom takes its tangent at a keyframe from that keyframe's NEIGHBOURS,
+ * so two keyframes close together inherit a tangent scaled to the distant ones.
+ * The cubic between them then overshoots its own endpoints -- the bulge or loop
+ * that shows up when points are bunched. Segments shorter than `straightBelow`
+ * in the (u, v) plane are therefore joined with a straight line instead.
+ *
+ * The cutoff is set from measurement, not taste. Comparing each segment's arc
+ * length against its own chord on the reference swing:
+ *
+ *     P7 to P7.5    0.074 m    arc/chord 1.135   <- a 13.5% detour, the distortion
+ *     P7.5 to P8    0.137 m    arc/chord 1.004
+ *     every other   >= 0.15 m  arc/chord <= 1.027
+ *
+ * so the curve only misbehaves below about 0.10 m, and 0.10 sits in the gap
+ * between the bad segment and the next shortest good one. Straightening that one
+ * segment takes its arc/chord to exactly 1.000.
+ *
+ * Set `straightBelow: Infinity` to make the entire path straight-line -- the
+ * one-line change to a pure polyline.
+ */
+export const CURVE = {
+  straightBelow: 0.1,
 };
 
 /**
@@ -94,8 +124,12 @@ export const ELBOW_HINT = {
 };
 
 export const TIMING = {
-  /** Real-world duration of the full swing at playback speed 1.0, seconds. */
-  swingSeconds: 1.35,
+  /**
+   * Real-world duration of the full swing at playback speed 1.0, seconds.
+   * Chosen so the backswing lands at ~0.75 s and the downswing at ~0.25 s, the
+   * ~3:1 tour tempo. Every angular velocity scales with this.
+   */
+  swingSeconds: 1.45,
   defaultSpeed: 0.3,
   /** Samples used to draw the hand-path curves. */
   pathSamples: 260,

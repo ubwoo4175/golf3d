@@ -114,24 +114,29 @@ every `(u, v)` inside a **disk** of radius `target` — an area, where the old f
 distance left only a circle. That is what makes free dragging compatible with a
 locked arm, and it is why the earlier version could not do both.
 
-`PLANE.offset` is now only where the reference rectangle is *drawn*. In the 3D
-view the solved offset is the short blue segment from the drag point out to the
-hand; the footer reports it as `⊥ offset`. Across the reference swing `d` runs
-0.21 → 0.46 m.
+`PLANE.offset` is now only where the reference rectangle is *drawn*, and the
+**rect ⊥** slider moves it between 15 and 55 cm from the spine axis. Moving it
+changes nothing about the swing: the hand's own distance is solved from the arm
+rules, so every joint and the whole path stay put and only the reported
+`⊥ offset` changes. It is a way to look at the same motion against a nearer or
+further reference plane. In the 3D view the solved offset is the short blue
+segment from the drag point out to the hand. Across the reference swing `d` runs
+0.23 → 0.46 m.
 
 ### The arm rules
 
-| Phase | Lead elbow | Trail elbow |
+| Position | Lead elbow | Trail elbow |
 | --- | --- | --- |
-| Backswing | straight | folds (to 115° at the top) |
-| Downswing | straight | extending |
-| **Impact (P7)** | straight | **still extending — 40° from straight** |
-| **Release (P8)** | **straight** | **straight** |
-| Follow-through | folds (to 98°) | straight |
+| P1 address | straight | straight (both, by symmetry at `u = 0`) |
+| P2 → P4 backswing | straight | folds, to 114° at the top |
+| P5 → P6 downswing | straight | extending — 108°, then 91° |
+| **P7 impact** | straight | **still extending — 39° from straight** |
+| **P7.5 release** | **straight** | **straight** |
+| P8 → P10 follow-through | folds, to 100° at the finish | straight |
 
-The handover is at `RELEASE_T`, deliberately later than impact. Verified across
-2001 samples: the locked arm holds 99.7% extension through its entire phase, with
-no reach violations anywhere.
+The handover is at `RELEASE_T`, deliberately after impact. Verified across 4001
+samples: the locked arm holds 99.7% extension through its entire phase, with no
+reach violations anywhere.
 
 #### Why the hands must cross the sternum at release
 
@@ -147,7 +152,7 @@ bounds `u` to a half-plane. With the lock ratio near 1 that bound sits ~3 mm fro
 zero, which means **the rules by themselves force the hands onto the trail side of
 the sternum until release and the lead side after it, meeting at `u = 0`.** Both
 arms can only be straight together at `u = 0`; that is geometry, not a stylistic
-choice, and it is why the P8 keyframe has `u = 0` exactly.
+choice, and it is why the P7.5 keyframe has `u = 0` exactly.
 
 Two consequences worth knowing:
 
@@ -179,15 +184,64 @@ near full extension, so that really is what 99.7% of a 32 + 35 cm arm looks like
 Backswing high and downswing low is the classic shallowing loop. Convexity is
 verified by a chord test, which is independent of traversal direction.
 
-### The reference swing
+### The P-system and shoulder rotation
 
-`REFERENCE_KEYFRAMES` in `src/swing.js` — 11 keyframes over `t ∈ [0, 1]`,
-Catmull-Rom interpolated, ~1.35 s at full speed. It approximates Rory's
-positions: 93° of shoulder turn at the top, a deep transition where the hands drop
-while the torso is already unwinding, and long extension through impact.
+`REFERENCE_KEYFRAMES` in `src/swing.js` — 11 keyframes over `t ∈ [0, 1]`, synced
+to a tour long-iron swing.
 
-**It is hand-authored from published swing positions, not motion capture.** Treat
-it as a well-shaped starting point you tune by dragging, not as measured truth.
+| | Position | t | time | shoulders |
+| --- | --- | --- | --- | --- |
+| P1 | address | 0.000 | 0.00 s | 0° |
+| P2 | takeaway, shaft parallel | 0.160 | 0.23 s | +22° |
+| P3 | lead arm parallel to ground | 0.330 | 0.48 s | +57° |
+| P4 | top of backswing | 0.520 | 0.75 s | **+90°** |
+| P5 | early downswing, lead arm parallel | 0.600 | 0.87 s | +45° |
+| P6 | delivery, shaft parallel | 0.655 | 0.95 s | **0°** |
+| P7 | impact | 0.690 | 1.00 s | −35° |
+| P7.5 | release, both arms straight | 0.725 | 1.05 s | −55° |
+| P8 | follow-through, shaft parallel | 0.775 | 1.12 s | −72° |
+| P9 | shoulders square to target | 0.850 | 1.23 s | **−90°** |
+| P10 | finish | 1.000 | 1.45 s | **−120°** |
+
+The four bold angles are not free parameters — P4, P6, P9 and P10 are *defined*
+by their shoulder rotation, so they are pinned exactly and the rest interpolate
+between them.
+
+Timing is a real constraint, not decoration. Backswing 0.75 s against a 0.25 s
+downswing is the ~3:1 tour tempo, and it puts peak torso rotation at **748°/s**
+through impact — the right order for a tour player, and Rory sits at the quick end
+of that range. Change `TIMING.swingSeconds` and every angular velocity scales
+with it.
+
+**The positions are hand-authored from published swing positions, not motion
+capture.** Treat them as a well-shaped starting point you tune by dragging.
+
+### Interpolation: curves, and when to stop using them
+
+Keyframes are joined with Catmull-Rom, which takes its tangent at a keyframe from
+that keyframe's *neighbours*. Two keyframes close together therefore inherit a
+tangent scaled to the distant ones, and the cubic between them detours — the
+distortion that shows up when points bunch.
+
+The cutoff is set from measurement. Comparing each segment's arc length against
+its own chord:
+
+| Segment | Length | arc / chord |
+| --- | --- | --- |
+| P7 → P7.5 | 0.074 m | **1.135** — a 13.5% detour |
+| P7.5 → P8 | 0.137 m | 1.004 |
+| all others | ≥ 0.15 m | ≤ 1.027 |
+
+So the curve only misbehaves below about 0.10 m, and `CURVE.straightBelow = 0.10`
+sits in the gap between the bad segment and the next shortest good one. Segments
+below it are drawn as straight lines, which takes P7 → P7.5 to exactly 1.000.
+
+Set `CURVE.straightBelow = Infinity` for an all-straight polyline — that is the
+whole change, one value in `config.js`.
+
+One curve is *not* distortion and is deliberately kept: P4 → P5 reverses direction
+slightly in `u`, because the hands drift a little past the top before changing
+direction. That is the transition float, and it is 0.9 cm.
 ## Controls
 
 | Action | Effect |
@@ -196,6 +250,7 @@ it as a well-shaped starting point you tune by dragging, not as measured truth.
 | Space | Play / pause |
 | ← / → | Step keyframe |
 | H, or the handedness button | Flip right- / left-handed |
+| rect ⊥ slider | Move the reference rectangle. Visual only — the swing does not change. |
 | Drag / scroll on 3D | Orbit / zoom |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference

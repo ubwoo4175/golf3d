@@ -26,50 +26,63 @@
  */
 
 import { rad } from './vec3.js';
-import { TIMING } from './config.js';
+import { TIMING, CURVE } from './config.js';
 import { solvePose } from './kinematics.js';
 
 export const PHASES = [
-  { id: 'backswing', label: 'Backswing', start: 0, end: 0.55 },
-  { id: 'downswing', label: 'Downswing', start: 0.55, end: 0.76 },
-  { id: 'followThrough', label: 'Follow-through', start: 0.76, end: 1 },
+  { id: 'backswing', label: 'Backswing', start: 0, end: 0.52 },
+  { id: 'downswing', label: 'Downswing', start: 0.52, end: 0.69 },
+  { id: 'followThrough', label: 'Follow-through', start: 0.69, end: 1 },
 ];
 
 export const phaseAt = (t) =>
   PHASES.find((p) => t <= p.end) ?? PHASES[PHASES.length - 1];
 
 /**
- * Release (P8): where the straight-arm constraint hands over from the lead arm
- * to the trail arm. Deliberately later than impact (t = 0.76).
+ * Release (P7.5): where the straight-arm constraint hands over from the lead arm
+ * to the trail arm. Deliberately after impact (P7, t = 0.69) -- the trail arm is
+ * still extending through impact and only reaches full length here.
  */
-export const RELEASE_T = 0.82;
+export const RELEASE_T = 0.725;
 
 /** Which arm is held straight at time t. */
 export const constraintAt = (t) => (t <= RELEASE_T ? 'lead' : 'trail');
 
 /**
- * t, torso angle (deg, + = away from target), hand u, hand v, label.
+ * The P-system, with shoulder rotation synced to a tour long-iron swing.
  *
- * u is <= 0 up to release and >= 0 after, hitting exactly 0 at release. That is
- * not a stylistic choice -- `freeArmULimit` shows the rules permit nothing else,
- * because the free arm would have to be longer than it is.
+ * Fields: t, torso angle (deg, + = turned away from target), hand u, hand v.
+ *
+ * SHOULDER ROTATION. The definitions of P4, P6, P9 and P10 are themselves stated
+ * in terms of shoulder turn, so those four are pinned exactly: +90 at the top,
+ * neutral at delivery, -90 square to the target, -120 at the finish. The rest are
+ * interpolated to match long-iron sequencing.
+ *
+ * TIMING. Backswing 0.75 s, downswing (P4 to P7) 0.25 s -- the ~3:1 tour tempo.
+ * That is not cosmetic: it puts peak torso rotation speed through impact at about
+ * 690 deg/s, which is the right order for a tour player. Change `swingSeconds`
+ * and every angular velocity scales with it.
+ *
+ * HAND PATH. u is <= 0 up to release and >= 0 after, hitting exactly 0 at
+ * release. That is not a stylistic choice -- `freeArmULimit` shows the rules
+ * permit nothing else, because the free arm would have to be longer than it is.
  */
 export const REFERENCE_KEYFRAMES = [
   // Backswing -- convex upward, so the hands rise early and the arc flattens.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.55, label: 'Address (P1)' },
-  { t: 0.13, thetaDeg: 15, u: -0.075, v: -0.435, label: 'Takeaway (P2)' },
-  { t: 0.27, thetaDeg: 40, u: -0.18, v: -0.29, label: 'Lead arm horizontal (P3)' },
-  { t: 0.42, thetaDeg: 70, u: -0.29, v: -0.17, label: 'Shaft parallel (P4)' },
-  { t: 0.55, thetaDeg: 93, u: -0.375, v: -0.1, label: 'Top of backswing (P5)' },
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.55, label: 'P1 address' },
+  { t: 0.16, thetaDeg: 22, u: -0.085, v: -0.425, label: 'P2 takeaway, shaft parallel' },
+  { t: 0.33, thetaDeg: 57, u: -0.195, v: -0.283, label: 'P3 lead arm parallel' },
+  { t: 0.52, thetaDeg: 90, u: -0.37, v: -0.09, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward, tracking under the backswing.
-  { t: 0.62, thetaDeg: 66, u: -0.36, v: -0.23, label: 'Transition' },
-  { t: 0.68, thetaDeg: 26, u: -0.29, v: -0.39, label: 'Delivery (P6)' },
-  { t: 0.76, thetaDeg: -38, u: -0.06, v: -0.52, label: 'Impact (P7)' },
-  // Release: the handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -60, u: 0.0, v: -0.48, label: 'Release (P8)' },
+  { t: 0.6, thetaDeg: 45, u: -0.345, v: -0.245, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.655, thetaDeg: 0, u: -0.27, v: -0.405, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.69, thetaDeg: -35, u: -0.055, v: -0.525, label: 'P7 impact' },
+  // The handover. Both arms straight, so u must be 0.
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.475, label: 'P7.5 release, both arms straight' },
   // Follow-through -- convex downward.
-  { t: 0.9, thetaDeg: -80, u: 0.19, v: -0.33, label: 'Trail arm extended (P9)' },
-  { t: 1.0, thetaDeg: -95, u: 0.3, v: 0.05, label: 'Finish (P10)' },
+  { t: 0.775, thetaDeg: -72, u: 0.115, v: -0.4, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.85, thetaDeg: -90, u: 0.215, v: -0.235, label: 'P9 shoulders 90° to target' },
+  { t: 1.0, thetaDeg: -120, u: 0.31, v: 0.09, label: 'P10 finish, shoulders 120°' },
 ];
 
 /**
@@ -148,6 +161,21 @@ export class SwingPath {
     return best;
   }
 
+  /** Straight-line length of segment `i` in the (u, v) plane, in metres. */
+  segmentLength(i) {
+    const a = this.keys[i];
+    const b = this.keys[i + 1];
+    return Math.hypot(b.u - a.u, b.v - a.v);
+  }
+
+  /**
+   * Whether segment `i` is drawn straight rather than curved. Applied to all
+   * three tracks together so the pose stays consistent with the drawn path.
+   */
+  isStraightSegment(i) {
+    return this.segmentLength(i) < CURVE.straightBelow;
+  }
+
   /** Interpolated driving values at normalised time `t`. */
   sample(t) {
     const keys = this.keys;
@@ -156,11 +184,18 @@ export class SwingPath {
     while (i < keys.length - 2 && keys[i + 1].t < clamped) i += 1;
     const span = keys[i + 1].t - keys[i].t || 1e-6;
     const localT = (clamped - keys[i].t) / span;
+
+    const lerp = (get) => get(keys[i]) + (get(keys[i + 1]) - get(keys[i])) * localT;
+    const interp = this.isStraightSegment(i)
+      ? lerp
+      : (get) => hermite(keys, i, localT, span, get);
+
+    const thetaDeg = interp((k) => k.thetaDeg);
     return {
-      theta: rad(hermite(keys, i, localT, span, (k) => k.thetaDeg)),
-      thetaDeg: hermite(keys, i, localT, span, (k) => k.thetaDeg),
-      u: hermite(keys, i, localT, span, (k) => k.u),
-      v: hermite(keys, i, localT, span, (k) => k.v),
+      theta: rad(thetaDeg),
+      thetaDeg,
+      u: interp((k) => k.u),
+      v: interp((k) => k.v),
       constraint: constraintAt(clamped),
     };
   }

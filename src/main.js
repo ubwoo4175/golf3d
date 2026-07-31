@@ -9,7 +9,7 @@
 
 import { TIMING, REACH } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
-import { setHandedness, getRig } from './kinematics.js';
+import { setHandedness, setPlaneOffset, getRig } from './kinematics.js';
 import { Store } from './state.js';
 import { PlaneView } from './view2d.js';
 import { SceneView } from './view3d.js';
@@ -30,12 +30,24 @@ const playButton = $('play');
 const scrub = $('scrub');
 const speed = $('speed');
 const handButton = $('handedness');
+const planeOffsetInput = $('plane-offset');
+const planeOffsetOut = $('plane-offset-out');
 
 playButton.addEventListener('click', () => store.set({ playing: !store.state.playing }));
 scrub.addEventListener('input', () =>
   store.set({ t: Number(scrub.value) / 1000, playing: false }),
 );
 speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 100 }));
+
+// Moves the reference rectangle only. The hand's own distance from the spine
+// axis is solved from the arm rules, so the swing itself is unaffected and the
+// cached path needs no invalidation -- what changes is the rectangle's position
+// and therefore the reported perpendicular offset.
+planeOffsetInput.addEventListener('input', () => {
+  const offset = Number(planeOffsetInput.value) / 100;
+  setPlaneOffset(offset);
+  store.set({ planeOffset: offset });
+});
 
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
 $('next-key').addEventListener('click', () => store.stepKeyframe(1));
@@ -132,6 +144,7 @@ store.subscribe((state) => {
   const sides = getRig().sides;
   handButton.textContent = `${state.handedness === 'right' ? 'Right' : 'Left'}-handed`;
   handButton.title = `Lead arm is the ${sides.lead}. Click or press H to flip.`;
+  planeOffsetOut.textContent = (state.planeOffset * 100).toFixed(0);
 });
 
 let last = performance.now();
@@ -161,4 +174,4 @@ observer.observe(planeView.canvas);
 observer.observe(sceneView.canvas);
 
 // Surface the constraint handover in the legend so the rule is discoverable.
-$('release-label').textContent = `release @ t ${RELEASE_T}`;
+$('release-label').textContent = `P7.5 release · t ${RELEASE_T}`;

@@ -86,6 +86,22 @@ export const getRig = () => rig;
 setHandedness(DEFAULT_HANDEDNESS);
 
 /**
+ * Where the reference rectangle sits, measured from the spine axis.
+ *
+ * This is purely where the rectangle is DRAWN. The hand's own distance from the
+ * axis is solved from the arm rules and does not depend on it, so moving the
+ * rectangle leaves the swing, the hand path and every joint untouched -- only
+ * the reported `normalOffset` and the rectangle's position in the 3D view move.
+ */
+let planeOffset = PLANE.offset;
+
+export const setPlaneOffset = (distance) => {
+  planeOffset = distance;
+};
+
+export const getPlaneOffset = () => planeOffset;
+
+/**
  * Orthonormal torso basis after rotating `theta` radians about the spine axis.
  *
  * The rotation is by `-H * theta` so that positive theta is always the
@@ -103,7 +119,7 @@ export function torsoBasis(theta) {
  * World position of a hand-plane point at perpendicular distance `distance` from
  * the spine axis. `PLANE.offset` puts it on the reference rectangle itself.
  */
-export function planeToWorld(basis, u, v, distance = PLANE.offset) {
+export function planeToWorld(basis, u, v, distance = planeOffset) {
   let p = V.addScaled(rig.shoulderCenter, basis.fwd, distance);
   p = V.addScaled(p, basis.side, u);
   return V.addScaled(p, basis.up, v);
@@ -261,7 +277,7 @@ export function solvePose({ theta, u, v, constraint = 'lead', ratio = ARM_LOCK_R
     /** Perpendicular distance from the spine axis to the hand. */
     axisDistance: solved.distance,
     /** Signed offset of the hand from the reference rectangle, along its normal. */
-    normalOffset: solved.distance - PLANE.offset,
+    normalOffset: solved.distance - planeOffset,
     reachable: solved.reachable,
     basis,
     handedness: rig.handedness,
