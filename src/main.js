@@ -7,9 +7,9 @@
  * the new shape on the next frame.
  */
 
-import { TIMING, REACH } from './config.js';
+import { TIMING, REACH, CLUBS, clubReach } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
-import { setHandedness, setSpineTilt, setPlaneOffset, getRig, ballPosition } from './rig.js';
+import { setHandedness, setClub, getClub, setPlaneOffset, getRig, ballPosition } from './rig.js';
 import { setClubLength, faceAngleToTarget } from './club.js';
 import { distance } from './vec3.js';
 import { Store } from './state.js';
@@ -23,7 +23,7 @@ const swing = new SwingPath();
 const store = new Store(swing);
 
 const planeView = new PlaneView($('plane-canvas'), store, swing);
-const wristView = new WristView($('wrist-canvas'), store, swing);
+const wristView = new WristView($('wrist-canvas'), $('wrist-overlay'), store, swing);
 const sceneView = new SceneView($('scene-canvas'), store, swing);
 
 swing.onChange(() => sceneView.refreshPaths());
@@ -34,8 +34,8 @@ const playButton = $('play');
 const scrub = $('scrub');
 const speed = $('speed');
 const handButton = $('handedness');
-const spineTiltInput = $('spine-tilt');
-const spineTiltOut = $('spine-tilt-out');
+const clubInput = $('club');
+const clubOut = $('club-out');
 
 // The rectangle is pinned to the address hand, so it follows P1 wherever P1 goes
 // -- dragged, reset, or moved by the spine slider. Registered before the view's
@@ -46,7 +46,9 @@ const spineTiltOut = $('spine-tilt-out');
 // is measured off the address pose, and both before the paths refresh.
 const syncToAddress = () => {
   setPlaneOffset(swing.addressAxisDistance());
-  setClubLength(swing.addressClubLength());
+  // The club's length is its own spec, not something measured off the pose. The
+  // ball was solved to sit where that club reaches, so the two agree at address.
+  setClubLength(clubReach(getClub()));
 };
 swing.onChange(syncToAddress);
 syncToAddress();
@@ -58,32 +60,34 @@ scrub.addEventListener('input', () =>
 speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 100 }));
 
 /**
- * Spine tilt stands in for club length.
+ * Picking a club re-poses the whole address.
  *
- * P1 is deliberately NOT touched: the address hand is anchored to a fixed point
- * on the rectangle, so tilting only rotates the torso frame underneath it. The
- * world positions all change, hence the emit to drop the cached path, but the
- * camera is left exactly where you put it.
+ * Unlike the old spine slider, this is not just a tilt: the club owns its spine
+ * angle, its length and its ball position, and the address hand follows from the
+ * arms hanging plumb at that angle. So all four are re-derived together, in
+ * dependency order -- tilt, then the address hand, then the rectangle and club
+ * length that are pinned to it, then the address wrist that aims at the ball.
+ *
+ * The camera is left exactly where you put it.
  */
-spineTiltInput.addEventListener('input', () => {
-  const deg = Number(spineTiltInput.value);
-  setSpineTilt(deg);
-  // The address hand is anchored and so needs no help, but the address CLUB
-  // does: the forearm has rotated under it, so re-aim the shaft at the ball.
+function applyClub(index) {
+  const club = CLUBS[index];
+  setClub(club.id);
+  swing.applyNaturalAddress();
   syncToAddress();
   swing.applyAddressClub();
   swing.emit();
-  store.set({ spineTilt: deg });
+  store.set({ club: club.id });
   sceneView.rebuildRig();
-});
+}
+
+clubInput.addEventListener('input', () => applyClub(Number(clubInput.value)));
 
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
 $('next-key').addEventListener('click', () => store.stepKeyframe(1));
 $('reset-path').addEventListener('click', () => {
   swing.reset();
-  syncToAddress();
-  swing.applyAddressClub();
-  swing.emit();
+  applyClub(Number(clubInput.value));
 });
 $('reset-camera').addEventListener('click', () => sceneView.resetCamera());
 
@@ -95,7 +99,7 @@ function applyHandedness(handedness) {
   setHandedness(handedness);
   store.set({ handedness });
   swing.emit(); // world positions changed, so drop the cached path
-  planeView.layout(); // the 2D horizontal axes follow handedness
+  planeView.layout(); // the horizontal axes follow handedness in both panels
   wristView.layout();
   sceneView.rebuildRig({ mirrorCamera: true });
 }
@@ -196,8 +200,9 @@ store.subscribe((state) => {
   const sides = getRig().sides;
   handButton.textContent = `${state.handedness === 'right' ? 'Right' : 'Left'}-handed`;
   handButton.title = `Lead arm is the ${sides.lead}. Click or press H to flip.`;
-  spineTiltOut.textContent = `${state.spineTilt}°`;
-  spineTiltInput.value = String(state.spineTilt);
+  const club = getClub();
+  clubOut.textContent = club.label;
+  clubInput.value = String(CLUBS.findIndex((c) => c.id === club.id));
 });
 
 let last = performance.now();

@@ -3,7 +3,7 @@
  * the 2D plane and the 3D scene synchronised: there is only ever one `t`.
  */
 
-import { TIMING, DEFAULT_HANDEDNESS, BODY } from './config.js';
+import { TIMING, DEFAULT_HANDEDNESS, DEFAULT_CLUB } from './config.js';
 
 export class Store {
   constructor(swing) {
@@ -16,8 +16,8 @@ export class Store {
       dragging: null,
       /** 'right' | 'left'. Mirrors the whole rig; see rig.setHandedness. */
       handedness: DEFAULT_HANDEDNESS,
-      /** Forward spine tilt in degrees; stands in for club length. */
-      spineTilt: BODY.spineTiltForwardDeg,
+      /** Selected club id; it owns the spine tilt and the ball position. */
+      club: DEFAULT_CLUB,
       showPath: true,
       showClub: true,
       showHeadPath: true,

@@ -48,10 +48,13 @@ h1 {
 main {
   flex: 1;
   display: grid;
-  /* Two editable 2D panels and the scene. The scene takes the extra width: the
-     2D panels are charts with fixed aspect needs, the 3D view benefits from
-     every pixel. Below 1200px the wrist panel drops under the hand panel. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
+  /* The two editable panels stack in a left column, the scene takes the right.
+     Three side-by-side columns made each 2D panel half as wide as it was tall,
+     which is the wrong shape for both of them: the wrist chart is wider than it
+     is tall, and fitting it into a narrow column left the camera so far back
+     that two thirds of the pane was empty. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1px;
   background: var(--line);
   min-height: 0;
@@ -285,6 +288,14 @@ button.toggle-button {
 
   main {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  #plane-pane,
+  #wrist-pane,
+  #scene-pane {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .pane {
@@ -292,26 +303,19 @@ button.toggle-button {
   }
 }
 
-@media (max-width: 1200px) and (min-width: 981px) {
-  main {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  }
+#plane-pane {
+  grid-column: 1;
+  grid-row: 1;
+}
 
-  #plane-pane {
-    grid-column: 1;
-    grid-row: 1;
-  }
+#wrist-pane {
+  grid-column: 1;
+  grid-row: 2;
+}
 
-  #wrist-pane {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
-  #scene-pane {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
+#scene-pane {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .slider output {
@@ -320,4 +324,39 @@ button.toggle-button {
   font: 11px ui-monospace, Menlo, monospace;
   color: var(--text);
   text-align: right;
+}
+
+
+/*
+ * The wrist pane stacks a WebGL canvas under a 2D overlay: the scene is drawn in
+ * 3D, while the text and the face dial stay in 2D where they are cheap and sharp.
+ * The overlay is on top and takes the pointer, so it owns the whole interaction
+ * and forwards nothing -- that is what keeps the drag behaviour identical to the
+ * flat version it replaced.
+ */
+.stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.stack > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stack > canvas + canvas {
+  background: transparent;
+}
+
+.slider.club {
+  flex: 0 1 210px;
+}
+
+.slider.club output {
+  min-width: 76px;
+  text-align: left;
 }

@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { BODY, PLANE, SCENE, CLUB, COLORS } from './config.js';
-import { HIP_PIVOT, getRig, planeToWorld, ballPosition } from './rig.js';
+import { HIP_PIVOT, getRig, getClub, planeToWorld, ballPosition } from './rig.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
 
@@ -20,8 +20,10 @@ const UP_Y = new THREE.Vector3(0, 1, 0);
 
 /** A capsule-ish limb that can be re-aimed between two points every frame. */
 class Segment {
-  constructor(parent, radius, color, opacity = 1) {
-    const geometry = new THREE.CylinderGeometry(radius, radius, 1, 12);
+  constructor(parent, radius, color, opacity = 1, tipRadius = radius) {
+    // Base radius at the origin end, tip radius at the far end -- a golf shaft
+    // is noticeably thicker at the grip than at the hosel.
+    const geometry = new THREE.CylinderGeometry(tipRadius, radius, 1, 12);
     geometry.translate(0, 0.5, 0); // origin at the base so scale.y == length
     this.mesh = new THREE.Mesh(
       geometry,
@@ -200,6 +202,7 @@ export class SceneView {
       child.material?.dispose();
     }
     this.buildStatic();
+    this.buildHead();
     this.torso.aim(HIP_PIVOT, getRig().shoulderCenter);
     if (mirrorCamera) {
       this.camera.position.z *= -1;
@@ -306,14 +309,12 @@ export class SceneView {
     };
     this.dragMarker = joint(this.scene, 0.022, COLORS.normalAxis, 0.9);
 
-    // The club. Butt end, shaft, head and a leading-edge bar that shows which
-    // way the face is pointing -- all driven by `pose.club`, so this view only
-    // has to aim them.
-    this.club = {
-      shaft: new Segment(this.scene, CLUB.shaftRadius, COLORS.shaft),
-      head: new Segment(this.scene, CLUB.headHeight / 2, COLORS.shaft),
-      face: new Segment(this.scene, 0.006, COLORS.face),
-    };
+    // The club: a tapered shaft plus a head box sized from the selected club's
+    // real dimensions. The head is rebuilt on club change, the shaft only aimed.
+    this.shaft = new Segment(this.scene, CLUB.buttRadius, COLORS.shaft, 1, CLUB.shaftRadius);
+    this.headGroup = new THREE.Group();
+    this.scene.add(this.headGroup);
+    this.buildHead();
 
     // Shoulders-to-hands triangle, redrawn each frame.
     this.triangle = new THREE.Line(
@@ -345,6 +346,37 @@ export class SceneView {
     );
     this.planeGroup.add(this.planeMesh, this.planeOutline);
     this.scene.add(this.planeGroup);
+  }
+
+  /**
+   * The clubhead, at the selected club's real proportions: toe-to-heel by
+   * crown-to-sole by face-to-back, in metres. An iron is a thin blade, a wood is
+   * a deep body -- the same box, very different numbers, which is enough for the
+   * silhouette to read correctly at this scale.
+   *
+   * The face is a separate thin slab on the front so which way the club looks is
+   * visible from any angle, and it is what makes the roll control legible.
+   */
+  buildHead() {
+    for (const child of [...this.headGroup.children]) {
+      this.headGroup.remove(child);
+      child.geometry?.dispose();
+      child.material?.dispose();
+    }
+    const { length, height, depth } = getClub().head;
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(length, height, depth),
+      new THREE.MeshStandardMaterial({ color: '#c8d2de', roughness: 0.35, metalness: 0.6 }),
+    );
+    // Local frame is (leadingEdge, headUp, faceNormal), so the head hangs off the
+    // shaft toward the toe and its face sits on the +z side.
+    body.position.set(length * 0.32, -height * 0.3, 0);
+    const face = new THREE.Mesh(
+      new THREE.BoxGeometry(length * 0.92, height * 0.86, 0.004),
+      new THREE.MeshStandardMaterial({ color: COLORS.face, roughness: 0.5 }),
+    );
+    face.position.set(length * 0.32, -height * 0.3, depth / 2 + 0.002);
+    this.headGroup.add(body, face);
   }
 
   buildPaths() {
@@ -421,15 +453,17 @@ export class SceneView {
     );
     tri.needsUpdate = true;
 
-    // The club. The head is drawn as a short stub along the leading edge so it
-    // reads as a head rather than a dot, with the face bar across it.
+    // The club. The head group's basis is (leadingEdge, headUp, faceNormal), so
+    // the box only has to be positioned once in `buildHead` and re-oriented here.
     const club = pose.club;
-    const headTail = V.addScaled(club.head, club.leadingEdge, -CLUB.headLength * 0.35);
-    const headTip = V.addScaled(club.head, club.leadingEdge, CLUB.headLength * 0.65);
-    this.club.shaft.aim(club.butt, club.head);
-    this.club.head.aim(headTail, headTip);
-    this.club.face.aim(club.head, V.addScaled(club.head, club.faceNormal, 0.11));
-    for (const part of Object.values(this.club)) part.mesh.visible = showClub;
+    this.shaft.aim(club.butt, club.head);
+    this.headGroup.position.copy(v3(club.head));
+    const headUp = V.normalize(V.cross(club.faceNormal, club.leadingEdge));
+    this.headGroup.setRotationFromMatrix(
+      new THREE.Matrix4().makeBasis(v3(club.leadingEdge), v3(headUp), v3(club.faceNormal)),
+    );
+    this.shaft.mesh.visible = showClub;
+    this.headGroup.visible = showClub;
 
     // The automatic perpendicular axis: drag point on the rectangle -> hand.
     this.dragMarker.position.copy(v3(pose.planePoint));

@@ -44,10 +44,13 @@
 
       <section id="wrist-pane" class="pane">
         <div class="pane-title">
-          <span>2D — wrist (club vs forearm)</span>
-          <span class="hint">drag the shaft · dial rolls the face</span>
+          <span>3D — wrist (club vs forearm)</span>
+          <span class="hint">drag the handle · dial rolls the face</span>
         </div>
-        <canvas id="wrist-canvas"></canvas>
+        <div class="stack">
+          <canvas id="wrist-canvas"></canvas>
+          <canvas id="wrist-overlay"></canvas>
+        </div>
         <ul class="legend">
           <li><i class="swatch" style="background: #e6eef8"></i>shaft</li>
           <li><i class="swatch" style="background: #ffd166"></i>face</li>
@@ -77,10 +80,14 @@
           <span>speed</span>
           <input id="speed" type="range" min="5" max="100" step="1" value="30" />
         </label>
-        <label class="slider narrow" title="Forward spine tilt at address, standing in for club length: 40° short iron, 22° driver. The address hand is anchored on the rectangle, so lifting the spine rotates the whole arm assembly — the hands rise and move further from the body, but their position on the rectangle does not change.">
-          <span>spine</span>
-          <input id="spine-tilt" type="range" min="22" max="45" step="1" value="32" />
-          <output id="spine-tilt-out">32°</output>
+        <label class="slider club" title="Standard club specs. Picking a club sets the address: longer club, more upright spine, higher hands, ball further away and further forward in the stance.">
+          <span>club</span>
+          <input id="club" type="range" min="0" max="5" step="1" value="2" list="club-ticks" />
+          <datalist id="club-ticks">
+            <option value="0"></option><option value="1"></option><option value="2"></option>
+            <option value="3"></option><option value="4"></option><option value="5"></option>
+          </datalist>
+          <output id="club-out">Mid iron</output>
         </label>
       </div>
 

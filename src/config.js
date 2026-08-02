@@ -20,32 +20,52 @@
 /** 'right' | 'left'. Which hand the golfer plays with. */
 export const DEFAULT_HANDEDNESS = 'right';
 
-/** Skeleton dimensions, loosely scaled to a ~1.88 m tour player. */
+/**
+ * Skeleton dimensions.
+ *
+ * Scaled to Rory McIlroy's published standing height of 1.75 m using Winter's
+ * anthropometric segment fractions -- his height is public, his segment lengths
+ * are not, so the ratios do the rest. Every length below is that fraction times
+ * 1.75 m, and the two adjustments are noted where they occur.
+ *
+ *   acromion height     0.818 H     upper arm          0.186 H
+ *   trochanter height   0.530 H     forearm            0.146 H
+ *   knee height         0.285 H     hand length        0.108 H
+ *   biacromial breadth  0.259 H     hip breadth        0.191 H
+ *
+ * The previous numbers were sized for a ~1.85 m player, which is 10 cm taller
+ * than Rory. That mattered: it is what put REACH at 0.670 m instead of 0.641 m.
+ */
 export const BODY = {
-  // Base of the spine axis: the fixed pivot the torso rotates about.
-  hipPivotHeight: 1.0,
-  // Distance from the hip pivot to the shoulder centre, along the spine axis.
-  torsoLength: 0.52,
-  shoulderWidth: 0.42,
-  upperArm: 0.32,
-  // Elbow to grip centre (forearm + hand), i.e. the second IK link.
-  forearm: 0.35,
+  // Base of the spine axis: the fixed pivot the torso rotates about. Greater
+  // trochanter height, 0.530 H.
+  hipPivotHeight: 0.928,
+  // Hip pivot to shoulder centre along the spine: acromion minus trochanter.
+  torsoLength: 0.504,
+  // Distance between the two SHOULDER JOINTS, which is biacromial breadth less
+  // the acromion-to-glenohumeral inset (0.035 m each side), not the breadth.
+  shoulderWidth: 0.383,
+  upperArm: 0.326,
+  // Elbow to grip centre, i.e. the second IK link: forearm (0.146 H) plus the
+  // 0.060 m from the wrist to the middle of the palm on the grip.
+  forearm: 0.316,
 
   // Static posture. The legs and the spine tilt never change during the swing;
-  // only the rotation about the spine axis does.
-  spineTiltForwardDeg: 32, // bend from vertical, top of spine toward the ball
+  // only the rotation about the spine axis does. The forward tilt is set by the
+  // club selector -- see CLUBS -- rather than authored here.
+  spineTiltForwardDeg: 34, // bend from vertical; replaced on club select
   spineTiltLateralDeg: 8, // lean away from the target, lead shoulder rides high
 
   // Cosmetic / static scaffolding for the 3D view.
-  pelvisWidth: 0.34,
-  footSpread: 0.32,
+  pelvisWidth: 0.334,
+  footSpread: 0.34,
   // Knee height and how far it sits toward the ball. Purely visual -- the legs
   // never move, this just stops them reading as stilts. Forward distances are
   // magnitudes along fwd; the view multiplies them by the handedness sign.
-  kneeHeight: 0.53,
+  kneeHeight: 0.499,
   kneeForward: 0.1,
-  neckLength: 0.13,
-  headRadius: 0.105,
+  neckLength: 0.10,
+  headRadius: 0.114,
 };
 
 export const REACH = BODY.upperArm + BODY.forearm;
@@ -139,33 +159,67 @@ export const ELBOW_HINT = {
 /**
  * The address position.
  *
- * The address hand is ANCHORED at a fixed point on the rectangle: it does not
- * move when the spine tilt changes. The anchor is defined by the short-iron
- * setup, `anchorTiltDeg`, where the arms hang plumb -- straight down in the side
- * view. That single reference fixes (u, v) once and for all.
+ * The arms hang PLUMB at address -- the hand directly below the shoulder centre
+ * in the side view. That single rule replaces the old fixed anchor, and it makes
+ * the anchor angle equal the spine tilt exactly, which is why there is no longer
+ * a separate `anchorTiltDeg` to keep in sync: `naturalAddress()` reads the tilt.
  *
- * Everything else follows from the torso frame rotating. Lift the spine toward
- * the long clubs and the whole arm assembly lifts with it, so the hands rise and
- * swing away from the body, while their position ON the rectangle stays put.
- * The arm never changes relative to the torso; only the torso's angle changes.
+ * The consequence is that picking a longer club stands the golfer up, which
+ * raises the hands and pushes the ball further away -- all three move together,
+ * which is what a real change of club does.
  */
 export const ADDRESS = {
-  /**
-   * Set from the saved default address rather than picked: P1 sits at
-   * v = -0.450, and the anchor circle puts that at a plumb hang of 44.7 degrees.
-   * Drop it back to 40 to put plumb at the short-iron setup instead, which moves
-   * the address hand 3.5 cm down the rectangle.
-   */
-  anchorTiltDeg: 44.7,
-  /**
-   * Slider range for the forward spine tilt, degrees from vertical: driver at the
-   * shallow end, short iron at the steep end. The steep end is the anchor tilt on
-   * purpose -- past it the fixed anchor would swing the hands BEHIND the plumb
-   * line, which no one addresses a ball from.
-   */
-  tiltMin: 22,
-  tiltMax: 45,
+  /** Butt of the club to the midpoint of the two hands on the grip. */
+  gripDown: 0.1,
 };
+
+/**
+ * The clubs.
+ *
+ * `lengthIn` and `lieDeg` are standard men's specs, not invented: 45.5" driver
+ * down to a 35.25" wedge, lie 56 degrees to 64.5. Rory plays standard length, so
+ * these are his lengths too; his own lie and loft tolerances are not public.
+ *
+ * `spineTiltDeg` is the forward bend at address, from published tour address
+ * ranges -- longer club, more upright. This is the one number here that is a
+ * published RANGE rather than a spec, because per-club spine angle is not
+ * something Rory's team has released.
+ *
+ * `ballForward` and the emergent shaft angle are SOLVED from the other two plus
+ * the arms hanging plumb, not authored. See the club section of the README: the
+ * solve is over-determined if you also insist on the standard lie at address, so
+ * the lie is what gives, coming out 5 degrees flatter than spec for the irons and
+ * 13 flatter for the driver -- which is closer to how a shaft actually looks at
+ * address than the static spec number is.
+ *
+ * Head dimensions are real proportions in metres: toe-to-heel, crown-to-sole,
+ * face-to-back.
+ */
+export const CLUBS = [
+  { id: 'wedge', label: 'Wedge', lengthIn: 35.25, lieDeg: 64.5, spineTiltDeg: 40,
+    ballHeight: 0.021, ballForward: 0.727, ballLateral: -0.02,
+    type: 'iron', head: { length: 0.080, height: 0.058, depth: 0.025 } },
+  { id: 'shortIron', label: 'Short iron', lengthIn: 36, lieDeg: 64, spineTiltDeg: 38,
+    ballHeight: 0.021, ballForward: 0.732, ballLateral: 0.0,
+    type: 'iron', head: { length: 0.078, height: 0.054, depth: 0.023 } },
+  { id: 'midIron', label: 'Mid iron', lengthIn: 37, lieDeg: 62.5, spineTiltDeg: 35,
+    ballHeight: 0.021, ballForward: 0.734, ballLateral: 0.03,
+    type: 'iron', head: { length: 0.078, height: 0.052, depth: 0.022 } },
+  { id: 'longIron', label: 'Long iron', lengthIn: 38.5, lieDeg: 61, spineTiltDeg: 32,
+    ballHeight: 0.021, ballForward: 0.76, ballLateral: 0.06,
+    type: 'iron', head: { length: 0.080, height: 0.050, depth: 0.021 } },
+  { id: 'wood', label: 'Fairway wood', lengthIn: 43, lieDeg: 56.5, spineTiltDeg: 28,
+    ballHeight: 0.021, ballForward: 0.893, ballLateral: 0.1,
+    type: 'wood', head: { length: 0.095, height: 0.042, depth: 0.060 } },
+  { id: 'driver', label: 'Driver', lengthIn: 45.5, lieDeg: 56, spineTiltDeg: 25,
+    ballHeight: 0.055, ballForward: 0.983, ballLateral: 0.16,
+    type: 'wood', head: { length: 0.118, height: 0.062, depth: 0.086 } },
+];
+
+export const DEFAULT_CLUB = 'midIron';
+
+/** Hand-to-clubhead distance for a club: its length less the grip-down. */
+export const clubReach = (club) => club.lengthIn * 0.0254 - ADDRESS.gripDown;
 
 /**
  * Half-width, in normalised time, of the window over which the straight-arm
@@ -210,11 +264,9 @@ export const TIMING = {
 export const CLUB = {
   /**
    * Fallback hand-to-head distance, used only until `main.js` pins the club to
-   * the address pose. The live value is solved, not configured -- see
-   * `SwingPath.addressClubLength`. At the 32 degree default it comes out at
-   * 0.831 m, and the slider's range spans 0.898 m (driver) to 0.761 m (wedge).
+   * the selected club. The live value is `clubReach(club)`.
    */
-  defaultLength: 0.831,
+  defaultLength: 0.84,
   /**
    * Roll offset that makes an authored `faceDeg` of 0 mean SQUARE -- face normal
    * straight down the target line -- at address. Solved, not chosen: the roll-0
@@ -222,12 +274,12 @@ export const CLUB = {
    * convenient frame but an arbitrary zero, and this shifts it onto one that
    * means something. Re-solve it if the address wrist angles change.
    */
-  faceZeroDeg: -92.1,
-  /** How far the butt end sticks out beyond the hands. */
+  faceZeroDeg: -87.9,
+  /** How far the butt end sticks out beyond the hands -- the grip-down. */
   buttBeyondHands: 0.1,
-  headLength: 0.1,
-  headHeight: 0.045,
-  shaftRadius: 0.008,
+  shaftRadius: 0.006,
+  /** Shaft taper: the butt is thicker than the tip. */
+  buttRadius: 0.009,
 };
 
 /**

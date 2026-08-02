@@ -11,7 +11,7 @@
  */
 
 import * as V from './vec3.js';
-import { BODY, PLANE, SCENE, DEFAULT_HANDEDNESS } from './config.js';
+import { BODY, PLANE, CLUBS, DEFAULT_CLUB, DEFAULT_HANDEDNESS } from './config.js';
 
 /** Sign convention: theta > 0 is the backswing (torso turns away from target). */
 export const BACKSWING_SIGN = 1;
@@ -97,11 +97,30 @@ export const getRig = () => rig;
 setHandedness(DEFAULT_HANDEDNESS);
 
 /**
- * Where the ball sits. Mirrored with the golfer, and no longer purely scene
- * furniture: the club's length is solved as the address hand's distance to it.
+ * The selected club. It owns the spine tilt and the ball position, so changing
+ * club is the one call that re-poses the whole address.
+ */
+let club = CLUBS.find((c) => c.id === DEFAULT_CLUB) ?? CLUBS[0];
+
+export const getClub = () => club;
+
+export function setClub(id) {
+  club = CLUBS.find((c) => c.id === id) ?? club;
+  setSpineTilt(club.spineTiltDeg);
+  return club;
+}
+
+/**
+ * Where the ball sits: solved per club, not scene furniture. Longer club, more
+ * upright posture, higher hands, ball further away and further forward in the
+ * stance -- the whole address moves together. Mirrored with the golfer.
  */
 export const ballPosition = () =>
-  V.vec(SCENE.ballLateral, SCENE.ballRadius, rig.H * SCENE.ballForward);
+  V.vec(club.ballLateral, club.ballHeight, rig.H * club.ballForward);
+
+// The default club owns the starting spine tilt, so apply it rather than leaving
+// the rig on the placeholder in BODY.
+setSpineTilt(club.spineTiltDeg);
 
 /**
  * Orthonormal torso basis after rotating `theta` radians about the spine axis.

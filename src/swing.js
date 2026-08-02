@@ -29,7 +29,7 @@
  * notes in the README for the measurements.
  */
 
-import { rad, distance, sub } from './vec3.js';
+import { rad, sub } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { naturalAddress, axisDistanceFor } from './arm.js';
 import { ballPosition } from './rig.js';
@@ -100,25 +100,25 @@ export const REFERENCE_KEYFRAMES = [
   // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
   // both arms stay equally straight through it: a one-piece takeaway. The
   // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.45, cockDeg: 14.4, bowDeg: -3.9, faceDeg: 0.0, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.406, cockDeg: -16.6, bowDeg: 12.4, faceDeg: -3.5, label: 'P1.5 takeaway' },
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4305, cockDeg: 11.0, bowDeg: 26.4, faceDeg: 0.0, label: 'P1 address' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -18.1, bowDeg: 21.0, faceDeg: -3.6, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
-  { t: 0.2868, thetaDeg: 40, u: -0.059, v: -0.252, cockDeg: -24.1, bowDeg: 27.8, faceDeg: -4.5, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.156, v: -0.114, cockDeg: -16.4, bowDeg: 91.9, faceDeg: -5.6, label: 'P3 lead arm parallel' },
-  { t: 0.6075, thetaDeg: 90, u: -0.237, v: -0.015, cockDeg: 30.7, bowDeg: -12.3, faceDeg: -9.7, label: 'P4 top, shoulders 90° away' },
+  { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.7, bowDeg: 32.4, faceDeg: -4.7, label: 'P2 shaft parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -26.5, bowDeg: 93.8, faceDeg: -5.8, label: 'P3 lead arm parallel' },
+  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: 33.3, bowDeg: -6.5, faceDeg: -10.0, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
   // keep drifting away from the target while the torso has already started down.
   // That is the transition float, and it is what opens the loop at the top --
   // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.7317, thetaDeg: 45, u: -0.287, v: -0.21, cockDeg: -14.6, bowDeg: 75.4, faceDeg: -11.7, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.7767, thetaDeg: 0, u: -0.23, v: -0.332, cockDeg: -39.7, bowDeg: 37.2, faceDeg: -12.4, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.81, thetaDeg: -35, u: -0.131, v: -0.384, cockDeg: -13.5, bowDeg: -12.2, faceDeg: -12.9, label: 'P7 impact' },
+  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: -22.8, bowDeg: 76.4, faceDeg: -12.0, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7767, thetaDeg: 0, u: -0.22, v: -0.3176, cockDeg: -40.3, bowDeg: 37.8, faceDeg: -12.8, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.81, thetaDeg: -35, u: -0.1253, v: -0.3674, cockDeg: -6.2, bowDeg: 12.4, faceDeg: -13.3, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.354, cockDeg: 10.1, bowDeg: -14.6, faceDeg: -13.3, label: 'P7.5 release, both arms straight' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 9.8, bowDeg: -3.2, faceDeg: -13.7, label: 'P7.5 release, both arms straight' },
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
-  { t: 0.8505, thetaDeg: -72, u: 0.04, v: -0.265, cockDeg: 28.8, bowDeg: 10.2, faceDeg: -13.6, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.128, v: -0.117, cockDeg: 22.3, bowDeg: 52.5, faceDeg: -14.0, label: 'P9 shoulders 90° to target' },
-  { t: 1.0, thetaDeg: -120, u: 0.22, v: 0.002, cockDeg: 22.7, bowDeg: 148.6, faceDeg: -16.0, label: 'P10 finish, shoulders 120°' },
+  { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 25.9, bowDeg: 17.2, faceDeg: -14.0, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 21.6, bowDeg: 57.5, faceDeg: -14.4, label: 'P9 shoulders 90° to target' },
+  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 37.6, bowDeg: 149.7, faceDeg: -16.4, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -220,14 +220,30 @@ export class SwingPath {
   }
 
   /**
-   * Snap P1 back to the anchored address. Called on reset only -- the anchor does
-   * not depend on spine tilt, so the tilt slider leaves P1 alone. Dragging P1
-   * overrides the anchor until the next reset.
+   * Put the address hand where the club's setup wants it, and TRANSLATE THE WHOLE
+   * PATH with it.
+   *
+   * Moving P1 alone would be wrong. The address moves several centimetres between
+   * a wedge and a driver, and leaving P2..P10 behind tears the takeaway off its
+   * own start: the P1 -> P1.5 segment grows past the straight-line cutoff, the
+   * curve that replaces it bulges `u` positive, and a positive `u` with the lead
+   * arm locked is a pose the arm rules forbid. Measured, that alone put 660 of
+   * 4000 samples outside the free-arm limit and left a 79000 rad/m spike in the
+   * hand path.
+   *
+   * Translating instead keeps the authored shape exactly and just relocates it,
+   * which is also the physical statement: a longer club raises the whole hand
+   * path, it does not reshape it.
    */
   applyNaturalAddress() {
     const { u, v } = naturalAddress();
-    this.keys[0].u = u;
-    this.keys[0].v = v;
+    const du = u - this.keys[0].u;
+    const dv = v - this.keys[0].v;
+    if (du === 0 && dv === 0) return;
+    for (const k of this.keys) {
+      k.u += du;
+      k.v += dv;
+    }
   }
 
   /**
@@ -255,15 +271,6 @@ export class SwingPath {
     Object.assign(this.keys[0], wristForDirection(pose.handFrame, aim));
   }
 
-  /**
-   * How long the club has to be for its head to sit on the ball at address.
-   * Pinned in exactly the way the rectangle is, so lifting the spine toward the
-   * long clubs lengthens the club rather than leaving it buried in the ground.
-   */
-  addressClubLength() {
-    return distance(this.poseAt(0).hand, ballPosition());
-  }
-
   onChange(fn) {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -271,6 +278,9 @@ export class SwingPath {
 
   emit() {
     this.cache = null;
+    // Bumped on every change so views that cache derived geometry can tell
+    // cheaply whether they need to rebuild it.
+    this.revision = (this.revision ?? 0) + 1;
     this.listeners.forEach((fn) => fn(this));
   }
 

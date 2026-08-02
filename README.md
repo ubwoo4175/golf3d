@@ -5,8 +5,9 @@ torso** through a golf swing, shaped after Rory McIlroy's sequencing.
 
 - **Left — 2D hand rectangle.** The torso-fixed rectangle seen head-on, relative
   to the elbow line. Drag here to reshape the swing.
-- **Middle — 2D wrist chart.** The club's direction relative to the lead forearm,
-  with the hand pinned at the centre. Drag the shaft; a dial rolls the face.
+- **Below it — 3D wrist chart.** The club's direction relative to the lead
+  forearm, with the hand pinned at the centre. Drag the handle; a dial rolls the
+  face.
 - **Right — 3D world space.** The same motion with the torso rotating about a
   fixed spine axis, plus the hand and clubhead paths.
 
@@ -126,49 +127,76 @@ is P1's own solved distance, so P1 always lies exactly on the rectangle and its
 it. In the 3D view the solved offset is the short blue segment from the drag point
 out to the hand. Across the reference swing `d` runs 0.37 → 0.57 m.
 
-### Spine tilt and the anchored address
+### The body
 
-The **spine** slider sets forward tilt from 22° to 45°, standing in for club
-length: 22° is a driver, 40° a short iron. It rebuilds the rig and **leaves the
-camera exactly where you put it** — only flipping handedness moves the camera, and
-even then it mirrors the current view in Z rather than resetting, so your orbit
-distance and elevation survive.
+Scaled to **Rory McIlroy's published standing height of 1.75 m** using Winter's
+anthropometric segment fractions. His height is public; his segment lengths are
+not, so the ratios do the rest.
 
-The address hand is **anchored** at a fixed point on the rectangle. At `u = 0` the
-hand is equidistant from both shoulders, so a locked lead arm confines it to a
-circle of radius `r = √(target² − (w/2)²)` about the shoulder centre in the
-sagittal plane. The anchor is the point on that circle where the arms hang plumb
-at `ADDRESS.anchorTiltDeg`:
-
-```
-v = −r·cos(anchorTilt)        distance = r·sin(anchorTilt)
-```
-
-**One consequence is worth being explicit about.** Anchoring `(u, v)` fixes the
-perpendicular distance too — the arm-length constraint ties all three together —
-so the rectangle, pinned to P1, does not move either. Changing spine tilt leaves
-the hand completely fixed *in the torso frame*. What changes is the world pose:
-the torso frame rotates and carries the whole arm assembly with it.
-
-That still produces the effect you want, by a different route:
-
-| Tilt | Hand height | Ahead of plumb | Hand-to-hip, horizontal |
+| | Fraction of height | Value | Previously |
 | --- | --- | --- | --- |
-| 22° (driver) | 0.899 m | 24.4 cm | 43.9 cm |
-| 26° | 0.869 m | 20.3 cm | 43.1 cm |
-| 32° (long iron, default) | 0.825 m | 13.9 cm | 41.5 cm |
-| 40° (short iron) | 0.770 m | 5.2 cm | 38.7 cm |
-| 44.7° (anchor) | 0.740 m | **0.0 cm** | 36.8 cm |
+| Hip pivot (greater trochanter) | 0.530 H | 0.928 m | 1.000 |
+| Torso, hip to shoulder centre | 0.818 − 0.530 H | 0.504 m | 0.520 |
+| Shoulder width, joint to joint | 0.259 H − 2×0.035 | 0.383 m | 0.420 |
+| Upper arm | 0.186 H | 0.326 m | 0.320 |
+| Forearm + hand to the grip | 0.146 H + 0.060 | 0.316 m | 0.350 |
+| **REACH** | | **0.641 m** | 0.670 |
 
-So the hands sit **7.1 cm further from the body** with a driver than a short iron,
-and 12.9 cm higher, while `(u, v)` stays at (0.0, −45.0) and the axis distance at
-44.5 cm throughout. The arm length stays 0.667 m at every tilt — the anchor sits on
-the constraint circle, so it is always exactly reachable with no clamping.
+The previous numbers were sized for a ~1.85 m player — 10 cm taller than Rory,
+which is where the 2.9 cm of extra arm came from. Shoulder width is the distance
+between the two shoulder *joints*, which is biacromial breadth less the
+acromion-to-glenohumeral inset, not the breadth itself.
 
-`anchorTiltDeg` is 44.7° because that is where the *saved default address* puts
-the plumb line, not because a short iron is addressed that steeply — see the note
-in `config.js`. Set it to 40 to put plumb at the short iron instead; that moves the
-address hand 3.5 cm down the rectangle and shifts the whole table with it.
+The authored hand path was rescaled by the reach ratio (0.9567) so its shape
+carries over unchanged onto the smaller frame.
+
+### Picking a club
+
+The **club** slider replaces the old spine-tilt slider. Six detents, and the club
+owns the address: its spine angle, its length, and where the ball sits.
+
+| Club | Length | Lie | Spine tilt | Hand height | Ball from axis |
+| --- | --- | --- | --- | --- | --- |
+| Wedge | 35.25″ | 64.5° | 40° | 0.707 m | 0.727 m |
+| Short iron | 36.0″ | 64.0° | 38° | 0.718 m | 0.732 m |
+| Mid iron | 37.0″ | 62.5° | 35° | 0.733 m | 0.734 m |
+| Long iron | 38.5″ | 61.0° | 32° | 0.748 m | 0.760 m |
+| Fairway wood | 43.0″ | 56.5° | 28° | 0.765 m | 0.893 m |
+| Driver | 45.5″ | 56.0° | 25° | 0.777 m | 0.983 m |
+
+Lengths and lies are **standard men's specs**. Rory plays standard length, so
+these are his lengths; his own lie tolerances are not public. The spine tilts come
+from published tour address ranges — longer club, more upright — and are the one
+column here that is a range rather than a spec, because per-club spine angle is
+not something his team has released.
+
+Everything else in the table is **solved**. Two rules do it:
+
+1. **The arms hang plumb at address** — hand directly below the shoulder centre
+   in the side view.
+2. **The club soles at the ball**, its head on the ground (teed, for the driver).
+
+Working the first through, the arm's angle round its constraint circle comes out
+exactly equal to the spine tilt, which is why there is no longer a separate
+`anchorTiltDeg` to keep in sync. The second then fixes the ball's distance.
+
+Measured, all six clubs sole within **0.9 cm** of the ball at address, with the
+face square to within 1.4°.
+
+#### What had to give
+
+Insisting on the standard *lie angle* at address as well over-determines it —
+three constraints, two freedoms. The lie is what gives, and the model's address
+shaft comes out about **5° flatter than spec for the irons and 13° for the
+driver**. That is closer to how a shaft actually looks at address than the spec
+number is: spec lie is a static measurement with the sole flat, not a posture.
+
+An earlier attempt kept the old **fixed** arm anchor and solved the spine tilt
+from the club instead. It gave the driver a 12.9° spine angle — nobody addresses
+a driver that upright. The cause was structural: with the anchor fixed, hand
+height moves only 7.7 cm across the whole tilt range while club length moves
+26 cm, so the only way to reach a long club's ball was to stand the golfer up.
+Hanging the arms plumb per club is what fixed it.
 
 ### The arm rules
 
@@ -471,7 +499,7 @@ direction. That is the transition float, and it is 0.9 cm.
 | Action | Effect |
 | --- | --- |
 | Drag on the 2D rectangle | Grabs the nearest keyframe handle, or the keyframe nearest the current time, and moves it. The 3D path reshapes live. |
-| Drag on the wrist chart | Aims the shaft: distance from the centre is the wrist hinge, direction is how it hinges. |
+| Drag the handle on the wrist chart | Aims the shaft: distance from the centre is the wrist hinge, direction is how it hinges. |
 | Drag the dial, bottom left of the wrist chart | Rolls the clubface about the shaft. |
 | Space | Play / pause |
 | ← / → | Step keyframe |
@@ -495,9 +523,9 @@ time or torso angle.
 | `src/pose.js` | The composer: driving values in, one full world-space pose out. The only module that knows the whole chain. |
 | `src/swing.js` | Keyframe track, interpolation, phase segmentation, path sampling. |
 | `src/state.js` | The single observable store all three views subscribe to. |
-| `src/canvas2d.js` | Shared plumbing for the two 2D panels: fit, hit-test, pointer capture, drag. |
+| `src/canvas2d.js` | Canvas plumbing for the hand panel: fit, hit-test, pointer capture, drag. |
 | `src/view2d.js` | The hand rectangle, head-on. |
-| `src/view-wrist.js` | The wrist chart and the face dial. |
+| `src/view-wrist.js` | The wrist scene: a Three.js chart with a 2D overlay for text and the face dial. |
 | `src/view3d.js` | Three.js scene. |
 | `src/main.js` | Wiring, controls, readouts, animation loop. |
 | `_config.yml`, `Gemfile` | Jekyll / GitHub Pages setup only. The app does not depend on them. |
@@ -572,18 +600,18 @@ the shaft, that means the face simply stays square to the swing arc: no authored
 manipulation. Measured, the face comes out at −0.04° at address and +0.02° at
 impact.
 
-The club's **length is solved too**, not configured: it is the address hand's
-distance to the ball, so the head sits on the ball at address by construction. It
-therefore tracks the spine slider, which already stands for club length — 0.898 m
-at the driver end, 0.831 m at the default, 0.761 m at the wedge end.
+The club's **length is its own spec** — standard men's lengths, less the 0.10 m
+from the butt to where the hands sit on the grip. It is the ball that moves to
+suit, not the club that is measured off the pose; see *Picking a club*.
 
 Independent checks the defaults were not tuned against:
 
 | | |
 | --- | --- |
-| Peak clubhead speed | **44.5 m/s, at t = 0.811** — impact. Tour driver ~50, 6-iron ~35. |
+| Peak clubhead speed | **45.1 m/s, at t = 0.811** — impact, for the mid iron the defaults are solved at. Tour driver ~50, 6-iron ~35. |
 | Peak shaft rotation | 2409°/s, against a `headSpeed / length` ceiling of 3047°/s |
-| Clubhead below ground | **never**; lowest point 0.021 m, which is the ball |
+| Clubhead below ground | **never**, for the four irons |
+| Face square at address / impact | −0.0° / −0.0° |
 
 ### One thing the club does not fix
 
@@ -601,6 +629,24 @@ Closing it means deciding that the impact hand should be lower, which is a chang
 to the authored swing rather than to the club, so it is left alone. The address
 position is pinned instead, because that is where a club's length is *defined* —
 you pick the club that reaches the ball at setup.
+
+### And one the club change exposed
+
+**On the fairway wood and driver the clubhead passes below ground** through
+impact — 6.8 cm and 11.1 cm at its deepest, both at t ≈ 0.816, just after the
+strike. The four irons never do.
+
+This is the same kind of finding, from the same cause: there is **one** authored
+hand path and six clubs. Going from the mid iron the defaults were solved at to
+the driver lengthens the club by 21.6 cm while the address only lifts the hands
+by 4.4 cm, so the same arc reaches about 17 cm deeper. A real driver swing is not
+the iron swing with a longer club — it is wider and shallower, with the low point
+behind a teed ball — and the model has no way to say that while the hand path is
+shared.
+
+The honest fixes are both bigger than a constant: author a hand path per club, or
+make the path's radius scale with club length. Neither is a tuning change, so the
+dip is reported rather than papered over.
 
 ### Extending it
 

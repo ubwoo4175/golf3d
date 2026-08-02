@@ -18,9 +18,8 @@ import {
   ARM_LOCK_RATIO,
   ARM_CAP_RATIO,
   ELBOW_HINT,
-  ADDRESS,
 } from './config.js';
-import { SHOULDER_UV } from './rig.js';
+import { SHOULDER_UV, getSpineTilt } from './rig.js';
 
 // --- the arm rules ---------------------------------------------------------
 
@@ -104,30 +103,32 @@ export function solveAxisDistance(u, v, blend, ratio = ARM_LOCK_RATIO) {
 }
 
 /**
- * The anchored address hand position, in plane coordinates.
+ * The address hand position, in plane coordinates.
  *
  * At u = 0 the hand is equidistant from both shoulders, so a locked lead arm
  * confines it to a circle of radius
  *     r = sqrt(target^2 - (shoulderWidth / 2)^2)
  * about the shoulder centre, in the plane spanned by the spine axis and the chest
- * normal -- the sagittal plane you see the golfer's setup in from the side. The
- * anchor is the point on that circle where the arms hang plumb at the short-iron
- * setup, `ADDRESS.anchorTiltDeg`:
- *     v = -r * cos(anchorTilt)      distance = r * sin(anchorTilt)
+ * normal -- the sagittal plane you see the golfer's setup in from the side.
  *
- * It does NOT depend on the current spine tilt. Note what that implies: since
- * (u, v) is fixed and the arm length is fixed, the perpendicular distance is
- * fixed too -- the arm-length constraint ties all three together. So changing the
- * tilt leaves the hand completely fixed IN THE TORSO FRAME, and the rectangle,
- * which is pinned to it, never moves either. What changes is the world pose: the
- * torso frame rotates, carrying the whole arm assembly with it, so the hands rise
- * and swing away from the body as the spine lifts toward the long clubs.
+ * The address point on that circle is where THE ARMS HANG PLUMB: the hand
+ * directly below the shoulder centre in the side view. Working that through, the
+ * angle round the circle comes out exactly equal to the forward spine tilt --
+ *     v = -r * cos(tilt)      distance = r * sin(tilt)
+ * -- which is why this reads the tilt rather than carrying an anchor constant of
+ * its own. It used to; keeping the anchor FIXED across tilts meant the hand height
+ * barely moved (7.7 cm across the whole range) while club length moved 26 cm, so
+ * no club but one could reach the ball.
+ *
+ * Now picking a longer club stands the golfer up, and the hands rise and move
+ * away from the body with the torso -- all three together, as a real club change
+ * does.
  */
 export function naturalAddress() {
   const target = ARM_LOCK_RATIO * REACH;
   const half = BODY.shoulderWidth / 2;
   const radius = Math.sqrt(Math.max(0, target * target - half * half));
-  const angle = V.rad(ADDRESS.anchorTiltDeg);
+  const angle = V.rad(getSpineTilt());
   return {
     u: 0,
     v: -radius * Math.cos(angle),
