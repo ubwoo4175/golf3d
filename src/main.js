@@ -9,9 +9,12 @@
 
 import { TIMING, REACH } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
-import { setHandedness, setSpineTilt, setPlaneOffset, getRig } from './kinematics.js';
+import { setHandedness, setSpineTilt, setPlaneOffset, getRig, ballPosition } from './rig.js';
+import { setClubLength, faceAngleToTarget } from './club.js';
+import { distance } from './vec3.js';
 import { Store } from './state.js';
 import { PlaneView } from './view2d.js';
+import { WristView } from './view-wrist.js';
 import { SceneView } from './view3d.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +23,7 @@ const swing = new SwingPath();
 const store = new Store(swing);
 
 const planeView = new PlaneView($('plane-canvas'), store, swing);
+const wristView = new WristView($('wrist-canvas'), store, swing);
 const sceneView = new SceneView($('scene-canvas'), store, swing);
 
 swing.onChange(() => sceneView.refreshPaths());
@@ -36,9 +40,16 @@ const spineTiltOut = $('spine-tilt-out');
 // The rectangle is pinned to the address hand, so it follows P1 wherever P1 goes
 // -- dragged, reset, or moved by the spine slider. Registered before the view's
 // own listener so the offset is current by the time the paths refresh.
-const syncPlaneToAddress = () => setPlaneOffset(swing.addressAxisDistance());
-swing.onChange(syncPlaneToAddress);
-syncPlaneToAddress();
+// The club is pinned the same way: its length is the address hand's distance to
+// the ball, so the head sits on the ball at address whatever the spine tilt is.
+// Order matters -- the rectangle offset has to be current before the club length
+// is measured off the address pose, and both before the paths refresh.
+const syncToAddress = () => {
+  setPlaneOffset(swing.addressAxisDistance());
+  setClubLength(swing.addressClubLength());
+};
+swing.onChange(syncToAddress);
+syncToAddress();
 
 playButton.addEventListener('click', () => store.set({ playing: !store.state.playing }));
 scrub.addEventListener('input', () =>
@@ -57,6 +68,10 @@ speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 1
 spineTiltInput.addEventListener('input', () => {
   const deg = Number(spineTiltInput.value);
   setSpineTilt(deg);
+  // The address hand is anchored and so needs no help, but the address CLUB
+  // does: the forearm has rotated under it, so re-aim the shaft at the ball.
+  syncToAddress();
+  swing.applyAddressClub();
   swing.emit();
   store.set({ spineTilt: deg });
   sceneView.rebuildRig();
@@ -64,7 +79,12 @@ spineTiltInput.addEventListener('input', () => {
 
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
 $('next-key').addEventListener('click', () => store.stepKeyframe(1));
-$('reset-path').addEventListener('click', () => swing.reset());
+$('reset-path').addEventListener('click', () => {
+  swing.reset();
+  syncToAddress();
+  swing.applyAddressClub();
+  swing.emit();
+});
 $('reset-camera').addEventListener('click', () => sceneView.resetCamera());
 
 /**
@@ -75,7 +95,8 @@ function applyHandedness(handedness) {
   setHandedness(handedness);
   store.set({ handedness });
   swing.emit(); // world positions changed, so drop the cached path
-  planeView.layout(); // the 2D horizontal axis follows handedness
+  planeView.layout(); // the 2D horizontal axes follow handedness
+  wristView.layout();
   sceneView.rebuildRig({ mirrorCamera: true });
 }
 
@@ -83,7 +104,14 @@ handButton.addEventListener('click', () =>
   applyHandedness(store.state.handedness === 'right' ? 'left' : 'right'),
 );
 
-for (const key of ['showPath', 'showPlane', 'showLocalPath', 'showGuides']) {
+for (const key of [
+  'showPath',
+  'showClub',
+  'showHeadPath',
+  'showPlane',
+  'showLocalPath',
+  'showGuides',
+]) {
   const input = $(key);
   input.checked = store.state[key];
   input.addEventListener('change', () => store.set({ [key]: input.checked }));
@@ -113,6 +141,8 @@ const readouts = {
   offset: $('r-offset'),
   lead: $('r-lead'),
   trail: $('r-trail'),
+  wrist: $('r-wrist'),
+  club: $('r-club'),
 };
 const labels = { lead: $('l-lead'), trail: $('l-trail') };
 
@@ -144,6 +174,15 @@ function updateReadouts(pose) {
     labels[which].classList.toggle('locked', pose.constraint === which);
   }
 
+  const { club } = pose;
+  readouts.wrist.textContent =
+    `${club.hingeDeg.toFixed(0)}° hinge · cock ${club.cockDeg.toFixed(0)} bow ${club.bowDeg.toFixed(0)}`;
+  // Face angle is only meaningful when the club is near the ball, so the
+  // head-to-ball distance is reported alongside it rather than on its own.
+  const toBall = distance(club.head, ballPosition()) * 100;
+  readouts.club.textContent =
+    `face ${club.faceDeg >= 0 ? '+' : ''}${club.faceDeg.toFixed(0)}° · head ${toBall.toFixed(0)} cm from ball`;
+
   const active = swing.keys[swing.nearestKeyframeIndex(t)];
   readouts.keyframe.textContent =
     active && Math.abs(active.t - t) < 1e-3 ? active.label : `→ ${active.label}`;
@@ -169,6 +208,7 @@ function frame(now) {
 
   const pose = swing.poseAt(store.state.t);
   planeView.draw(pose);
+  wristView.draw(pose);
   sceneView.draw(pose);
   updateReadouts(pose);
 
@@ -181,10 +221,12 @@ requestAnimationFrame(frame);
 const observer = new ResizeObserver((entries) => {
   for (const entry of entries) {
     if (entry.target === planeView.canvas) planeView.resize();
+    if (entry.target === wristView.canvas) wristView.resize();
     if (entry.target === sceneView.canvas) sceneView.resize();
   }
 });
 observer.observe(planeView.canvas);
+observer.observe(wristView.canvas);
 observer.observe(sceneView.canvas);
 
 // Surface the constraint handover in the legend so the rule is discoverable.

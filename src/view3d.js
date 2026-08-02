@@ -10,8 +10,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { BODY, PLANE, SCENE, COLORS } from './config.js';
-import { HIP_PIVOT, getRig, planeToWorld } from './kinematics.js';
+import { BODY, PLANE, SCENE, CLUB, COLORS } from './config.js';
+import { HIP_PIVOT, getRig, planeToWorld, ballPosition } from './rig.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
 
@@ -231,9 +231,9 @@ export class SceneView {
     group.add(new THREE.GridHelper(6, 24, '#22303f', '#161f2b'));
 
     // The ball sits on the chest-normal side, forward in the stance (lead side).
-    const ballZ = H * SCENE.ballForward;
-    const ball = joint(group, SCENE.ballRadius, '#ffffff');
-    ball.position.set(SCENE.ballLateral, SCENE.ballRadius, ballZ);
+    const ballAt = ballPosition();
+    const ballZ = ballAt.z;
+    joint(group, SCENE.ballRadius, '#ffffff').position.copy(v3(ballAt));
 
     // Target line: the ball flies toward +X for either handedness.
     group.add(
@@ -306,6 +306,15 @@ export class SceneView {
     };
     this.dragMarker = joint(this.scene, 0.022, COLORS.normalAxis, 0.9);
 
+    // The club. Butt end, shaft, head and a leading-edge bar that shows which
+    // way the face is pointing -- all driven by `pose.club`, so this view only
+    // has to aim them.
+    this.club = {
+      shaft: new Segment(this.scene, CLUB.shaftRadius, COLORS.shaft),
+      head: new Segment(this.scene, CLUB.headHeight / 2, COLORS.shaft),
+      face: new Segment(this.scene, 0.006, COLORS.face),
+    };
+
     // Shoulders-to-hands triangle, redrawn each frame.
     this.triangle = new THREE.Line(
       new THREE.BufferGeometry().setAttribute(
@@ -340,6 +349,10 @@ export class SceneView {
 
   buildPaths() {
     this.worldPath = new PathTube(this.scene, 0.009);
+    // The clubhead's own trace, thinner than the hand path so the two read as
+    // related but distinct -- the hand path is the subject, this is its
+    // consequence.
+    this.headPath = new PathTube(this.scene, 0.006, 0.75);
     // The same path in torso-local coordinates, drawn on the rotating plane so
     // you can see the 2D trace ride around with the body. Lives in the plane
     // group, whose own frame is (u, v, plane normal).
@@ -351,8 +364,9 @@ export class SceneView {
 
   /** Recompute both path curves. Called whenever a keyframe moves. */
   refreshPaths() {
-    const { world, local } = this.swing.sampledPath();
+    const { world, local, head } = this.swing.sampledPath();
     this.worldPath.update(world, (s) => v3(s.p));
+    this.headPath.update(head, (s) => v3(s.p));
     this.localPath.update(local, (s) => new THREE.Vector3(s.u, s.v, 0));
   }
 
@@ -375,7 +389,7 @@ export class SceneView {
   }
 
   draw(pose) {
-    const { showPath, showPlane, showLocalPath } = this.store.state;
+    const { showPath, showPlane, showLocalPath, showClub, showHeadPath } = this.store.state;
     const { basis, lead, trail } = pose;
 
     this.shoulderLine.aim(pose.trailShoulder, pose.leadShoulder);
@@ -406,6 +420,16 @@ export class SceneView {
       tri.setXYZ(i, p.x, p.y, p.z),
     );
     tri.needsUpdate = true;
+
+    // The club. The head is drawn as a short stub along the leading edge so it
+    // reads as a head rather than a dot, with the face bar across it.
+    const club = pose.club;
+    const headTail = V.addScaled(club.head, club.leadingEdge, -CLUB.headLength * 0.35);
+    const headTip = V.addScaled(club.head, club.leadingEdge, CLUB.headLength * 0.65);
+    this.club.shaft.aim(club.butt, club.head);
+    this.club.head.aim(headTail, headTip);
+    this.club.face.aim(club.head, V.addScaled(club.head, club.faceNormal, 0.11));
+    for (const part of Object.values(this.club)) part.mesh.visible = showClub;
 
     // The automatic perpendicular axis: drag point on the rectangle -> hand.
     this.dragMarker.position.copy(v3(pose.planePoint));
@@ -442,6 +466,7 @@ export class SceneView {
     this.planeGroup.visible = showPlane;
     this.localPath.setVisible(showPlane && showLocalPath);
     this.worldPath.setVisible(showPath);
+    this.headPath.setVisible(showHeadPath);
 
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

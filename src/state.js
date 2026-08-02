@@ -14,11 +14,13 @@ export class Store {
       speed: TIMING.defaultSpeed,
       /** Index of the keyframe currently being dragged, or null. */
       dragging: null,
-      /** 'right' | 'left'. Mirrors the whole rig; see kinematics.setHandedness. */
+      /** 'right' | 'left'. Mirrors the whole rig; see rig.setHandedness. */
       handedness: DEFAULT_HANDEDNESS,
       /** Forward spine tilt in degrees; stands in for club length. */
       spineTilt: BODY.spineTiltForwardDeg,
       showPath: true,
+      showClub: true,
+      showHeadPath: true,
       showPlane: true,
       showLocalPath: true,
       showGuides: true,

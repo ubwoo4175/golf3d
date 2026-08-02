@@ -2,7 +2,7 @@
  * The swing path: an editable keyframe track of (torso angle, hand u, hand v)
  * against normalised swing time t in [0, 1]. The hand's perpendicular distance
  * from the rectangle is not authored -- it is solved from the arm rules, see
- * `axisDistanceFor` in kinematics.js.
+ * `axisDistanceFor` in arm.js.
  *
  * The reference values approximate Rory McIlroy's sequencing -- ~93 degrees of
  * shoulder turn at the top, a deep transition where the hands drop while the
@@ -29,9 +29,12 @@
  * notes in the README for the measurements.
  */
 
-import { rad } from './vec3.js';
+import { rad, distance, sub } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
-import { solvePose, naturalAddress, axisDistanceFor } from './kinematics.js';
+import { naturalAddress, axisDistanceFor } from './arm.js';
+import { ballPosition } from './rig.js';
+import { wristForDirection } from './club.js';
+import { solvePose } from './pose.js';
 
 export const PHASES = [
   { id: 'backswing', label: 'Backswing', start: 0, end: 0.6075 },
@@ -97,25 +100,25 @@ export const REFERENCE_KEYFRAMES = [
   // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
   // both arms stay equally straight through it: a one-piece takeaway. The
   // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.45, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.406, label: 'P1.5 takeaway' },
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.45, cockDeg: 14.4, bowDeg: -3.9, faceDeg: 0.0, label: 'P1 address' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.406, cockDeg: -16.6, bowDeg: 12.4, faceDeg: -3.5, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
-  { t: 0.2868, thetaDeg: 40, u: -0.059, v: -0.252, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.156, v: -0.114, label: 'P3 lead arm parallel' },
-  { t: 0.6075, thetaDeg: 90, u: -0.237, v: -0.015, label: 'P4 top, shoulders 90° away' },
+  { t: 0.2868, thetaDeg: 40, u: -0.059, v: -0.252, cockDeg: -24.1, bowDeg: 27.8, faceDeg: -4.5, label: 'P2 shaft parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.156, v: -0.114, cockDeg: -16.4, bowDeg: 91.9, faceDeg: -5.6, label: 'P3 lead arm parallel' },
+  { t: 0.6075, thetaDeg: 90, u: -0.237, v: -0.015, cockDeg: 30.7, bowDeg: -12.3, faceDeg: -9.7, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
   // keep drifting away from the target while the torso has already started down.
   // That is the transition float, and it is what opens the loop at the top --
   // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.7317, thetaDeg: 45, u: -0.287, v: -0.21, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.7767, thetaDeg: 0, u: -0.23, v: -0.332, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.81, thetaDeg: -35, u: -0.131, v: -0.384, label: 'P7 impact' },
+  { t: 0.7317, thetaDeg: 45, u: -0.287, v: -0.21, cockDeg: -14.6, bowDeg: 75.4, faceDeg: -11.7, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7767, thetaDeg: 0, u: -0.23, v: -0.332, cockDeg: -39.7, bowDeg: 37.2, faceDeg: -12.4, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.81, thetaDeg: -35, u: -0.131, v: -0.384, cockDeg: -13.5, bowDeg: -12.2, faceDeg: -12.9, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.354, label: 'P7.5 release, both arms straight' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.354, cockDeg: 10.1, bowDeg: -14.6, faceDeg: -13.3, label: 'P7.5 release, both arms straight' },
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
-  { t: 0.8505, thetaDeg: -72, u: 0.04, v: -0.265, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.128, v: -0.117, label: 'P9 shoulders 90° to target' },
-  { t: 1.0, thetaDeg: -120, u: 0.22, v: 0.002, label: 'P10 finish, shoulders 120°' },
+  { t: 0.8505, thetaDeg: -72, u: 0.04, v: -0.265, cockDeg: 28.8, bowDeg: 10.2, faceDeg: -13.6, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.8756, thetaDeg: -90, u: 0.128, v: -0.117, cockDeg: 22.3, bowDeg: 52.5, faceDeg: -14.0, label: 'P9 shoulders 90° to target' },
+  { t: 1.0, thetaDeg: -120, u: 0.22, v: 0.002, cockDeg: 22.7, bowDeg: 148.6, faceDeg: -16.0, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -209,7 +212,9 @@ export class SwingPath {
   }
 
   reset(keyframes = REFERENCE_KEYFRAMES) {
-    this.keys = keyframes.map((k) => ({ ...k }));
+    // Fill in every channel so a partial keyframe list -- one written before the
+    // club existed, say -- interpolates as a neutral wrist rather than as NaN.
+    this.keys = keyframes.map((k) => ({ cockDeg: 0, bowDeg: 0, faceDeg: 0, ...k }));
     this.applyNaturalAddress();
     this.emit();
   }
@@ -234,6 +239,31 @@ export class SwingPath {
     return axisDistanceFor(constraintAt(p1.t), p1.u, p1.v).distance;
   }
 
+  /**
+   * Aim the address club at the ball.
+   *
+   * Unlike the address HAND, which is anchored at a tilt-invariant point on the
+   * rectangle, the address WRIST cannot be held constant across spine tilts: the
+   * forearm swings as the torso frame rotates, so the same (cock, bow) aims the
+   * shaft somewhere new. Holding the numbers fixed left the clubhead 20-24 cm
+   * off the ball at the ends of the slider's range. So the address wrist is
+   * derived rather than authored, and re-derived whenever the tilt moves.
+   */
+  applyAddressClub() {
+    const pose = this.poseAt(this.keys[0].t);
+    const aim = sub(ballPosition(), pose.hand);
+    Object.assign(this.keys[0], wristForDirection(pose.handFrame, aim));
+  }
+
+  /**
+   * How long the club has to be for its head to sit on the ball at address.
+   * Pinned in exactly the way the rectangle is, so lifting the spine toward the
+   * long clubs lengthens the club rather than leaving it buried in the ground.
+   */
+  addressClubLength() {
+    return distance(this.poseAt(0).hand, ballPosition());
+  }
+
   onChange(fn) {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -250,6 +280,19 @@ export class SwingPath {
     if (!key || (key.u === u && key.v === v)) return;
     key.u = u;
     key.v = v;
+    this.emit();
+  }
+
+  /**
+   * Set one keyframe's wrist channels. Accepts a partial patch, so the wrist view
+   * can drag the shaft direction without disturbing the face roll and vice versa.
+   */
+  setKeyframeWrist(index, patch) {
+    const key = this.keys[index];
+    if (!key) return;
+    const changed = Object.entries(patch).some(([k, value]) => key[k] !== value);
+    if (!changed) return;
+    Object.assign(key, patch);
     this.emit();
   }
 
@@ -295,27 +338,38 @@ export class SwingPath {
     const straight = this.isStraightSegment(i);
     const isStraight = (index) =>
       index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
-    const hand = (get) =>
-      straight ? lerp(get) : hermite(keys, i, localT, span, get, false, isStraight);
 
-    // The torso angle is pinned by the P-system, so it is interpolated without
-    // overshoot; the hand track is free and is interpolated for smoothness.
-    //
-    // The straight-segment rule applies to the HAND ONLY. It exists to stop the
-    // cubic bulging when two keyframes are close together in the (u, v) plane,
-    // which is a statement about the drawn path and nothing else. Letting it also
-    // straighten the angle track would make the torso turn at a constant rate for
-    // the whole of that segment -- and since the takeaway is a straight segment
-    // lasting 273 ms, that alone put the torso at 80 deg/s at address, when the
-    // golfer is standing still. The angle is always interpolated as a curve.
+    /** Free curve, no overshoot limiting and no straight-segment rule. */
+    const curve = (name) => hermite(keys, i, localT, span, (k) => k[name], false);
+    /**
+     * The hand track. The straight-segment rule applies HERE ONLY. It exists to
+     * stop the cubic bulging when two keyframes are close together in the (u, v)
+     * plane, which is a statement about the drawn path and nothing else. Letting
+     * it also straighten the angle track would make the torso turn at a constant
+     * rate for the whole of that segment -- and since the takeaway is a straight
+     * segment lasting 273 ms, that alone put the torso at 80 deg/s at address,
+     * with the golfer standing still.
+     */
+    const hand = (name) =>
+      straight
+        ? lerp((k) => k[name])
+        : hermite(keys, i, localT, span, (k) => k[name], false, isStraight);
+
+    // The torso angle is pinned by the P-system, so it alone is interpolated
+    // without overshoot; every other track is a free curve.
     const thetaDeg = hermite(keys, i, localT, span, (k) => k.thetaDeg, true);
     return {
       theta: rad(thetaDeg),
       thetaDeg,
-      u: hand((k) => k.u),
-      v: hand((k) => k.v),
+      u: hand('u'),
+      v: hand('v'),
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
+      wrist: {
+        cockDeg: curve('cockDeg'),
+        bowDeg: curve('bowDeg'),
+        faceDeg: curve('faceDeg'),
+      },
     };
   }
 
@@ -325,22 +379,26 @@ export class SwingPath {
 
   /**
    * Densely sampled path, cached until a keyframe moves or handedness changes.
-   * `local` is the (u, v) trace on the rectangle, `world` the true 3D trace --
-   * which is no longer planar, since the solved perpendicular distance varies.
+   * `local` is the (u, v) trace on the rectangle, `world` the true 3D hand trace
+   * -- which is no longer planar, since the solved perpendicular distance varies
+   * -- and `head` the clubhead's trace.
    */
   sampledPath() {
     if (this.cache) return this.cache;
     const n = TIMING.pathSamples;
     const local = [];
     const world = [];
+    const head = [];
     for (let i = 0; i < n; i += 1) {
       const t = i / (n - 1);
       const d = this.sample(t);
       const pose = solvePose(d);
-      local.push({ t, u: d.u, v: d.v, phase: phaseAt(t).id });
-      world.push({ t, p: pose.hand, phase: phaseAt(t).id });
+      const phase = phaseAt(t).id;
+      local.push({ t, u: d.u, v: d.v, phase });
+      world.push({ t, p: pose.hand, phase });
+      head.push({ t, p: pose.club.head, phase });
     }
-    this.cache = { local, world };
+    this.cache = { local, world, head };
     return this.cache;
   }
 }

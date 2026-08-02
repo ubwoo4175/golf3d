@@ -61,13 +61,20 @@ export const REACH = BODY.upperArm + BODY.forearm;
 export const ARM_LOCK_RATIO = 0.995;
 
 /**
+ * Hard ceiling on arm extension, just under 1.0 so it stays clear of the IK's own
+ * overextension threshold. Only the release blend ever reaches it, and with
+ * `ARM_LOCK_RATIO` at 0.995 it no longer binds even there.
+ */
+export const ARM_CAP_RATIO = 0.999;
+
+/**
  * The hand rectangle.
  *
  * The rectangle is torso-fixed and parallel to the spine axis. It is the surface
  * you DRAG on, and the 2D view is a head-on look at it -- but the hand itself no
  * longer lies on it. The hand sits at a perpendicular distance from the spine
  * axis that is solved so the locked arm stays straight (see `axisDistanceFor` in
- * kinematics.js).
+ * arm.js).
  *
  * The rectangle is pinned to the address hand: its distance from the axis is
  * P1's own solved distance, so P1 always lies exactly on the rectangle and its
@@ -189,6 +196,41 @@ export const TIMING = {
 };
 
 /**
+ * The club.
+ *
+ * Lengths are hand-to-clubhead, not the manufacturer's shaft length: the grip is
+ * held some way down. The club tracks the spine slider rather than getting one of
+ * its own, since that slider already stands for club length -- you bend more for a
+ * wedge than for a driver.
+ *
+ * `longest` and `shortest` are SOLVED, not chosen: at each end of the tilt range
+ * they are the distance from the address hand to the ball, so the head sits on the
+ * ball at address. See the club section of the README.
+ */
+export const CLUB = {
+  /**
+   * Fallback hand-to-head distance, used only until `main.js` pins the club to
+   * the address pose. The live value is solved, not configured -- see
+   * `SwingPath.addressClubLength`. At the 32 degree default it comes out at
+   * 0.831 m, and the slider's range spans 0.898 m (driver) to 0.761 m (wedge).
+   */
+  defaultLength: 0.831,
+  /**
+   * Roll offset that makes an authored `faceDeg` of 0 mean SQUARE -- face normal
+   * straight down the target line -- at address. Solved, not chosen: the roll-0
+   * reference is the forearm-plane normal carried along the shaft, which is a
+   * convenient frame but an arbitrary zero, and this shifts it onto one that
+   * means something. Re-solve it if the address wrist angles change.
+   */
+  faceZeroDeg: -92.1,
+  /** How far the butt end sticks out beyond the hands. */
+  buttBeyondHands: 0.1,
+  headLength: 0.1,
+  headHeight: 0.045,
+  shaftRadius: 0.008,
+};
+
+/**
  * Scene furniture. `forward` distances are magnitudes along the chest normal;
  * the 3D view multiplies them by the handedness sign, so flipping handedness
  * mirrors the ball and the camera along with the golfer.
@@ -215,6 +257,8 @@ export const COLORS = {
   body: '#9aa7b8',
   plane: '#4aa3ff',
   elbowLine: '#ffd166',
+  shaft: '#e6eef8',
+  face: '#ffd166',
   normalAxis: '#7fd4ff',
   guide: '#5a6b80',
   unreachable: '#241a24',

@@ -21,79 +21,36 @@
  */
 
 import { PLANE, COLORS } from './config.js';
-import {
-  straightArmLocus,
-  freeArmULimit,
-  SHOULDER_UV,
-  worldToPlane,
-  getRig,
-} from './kinematics.js';
+import { straightArmLocus, freeArmULimit } from './arm.js';
+import { SHOULDER_UV, worldToPlane, getRig } from './rig.js';
 import { phaseAt, RELEASE_T } from './swing.js';
+import { Canvas2D } from './canvas2d.js';
 import { clamp } from './vec3.js';
 
 const GRAB_RADIUS_PX = 14;
-const MARGIN = 38;
 
-export class PlaneView {
+export class PlaneView extends Canvas2D {
   constructor(canvas, store, swing) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    super(canvas);
     this.store = store;
     this.swing = swing;
-    this.hover = null;
-    this.viewport = { scale: 1, ox: 0, oy: 0, flip: 1 };
-
     this.resize();
-    this.bindPointer();
-  }
-
-  resize() {
-    // Measure the canvas's own box, never the parent's: flex decides the
-    // canvas height, and the CSS size must match the backing store or pointer
-    // coordinates and drawn coordinates drift apart.
-    const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
-    this.w = Math.max(1, rect.width);
-    this.h = Math.max(1, rect.height);
-    this.canvas.width = Math.round(this.w * dpr);
-    this.canvas.height = Math.round(this.h * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.layout();
+    this.bindDrag();
   }
 
   /** Recompute the plane-to-screen mapping. Also called when handedness flips. */
   layout() {
-    const spanU = PLANE.uMax - PLANE.uMin;
-    const spanV = PLANE.vMax - PLANE.vMin;
-    const scale = Math.min((this.w - 2 * MARGIN) / spanU, (this.h - 2 * MARGIN) / spanV);
-    const uCenter = (PLANE.uMin + PLANE.uMax) / 2;
-    const vCenter = (PLANE.vMin + PLANE.vMax) / 2;
     // Negated handedness: +H would put the lead side on the right, which is the
     // face-on view of the golfer. Looking out through their own eyes mirrors it.
-    const flip = -getRig().H;
-    // Anchor on the rectangle's centre so the flip is exact for any bounds, and
-    // invert screen y so +v points up.
-    this.viewport = {
-      scale,
-      flip,
-      ox: this.w / 2 - flip * uCenter * scale,
-      oy: this.h / 2 + vCenter * scale,
-    };
-  }
-
-  toPx(u, v) {
-    const { scale, ox, oy, flip } = this.viewport;
-    return { x: ox + flip * u * scale, y: oy - v * scale };
+    this.fitBox(
+      { xMin: PLANE.uMin, xMax: PLANE.uMax, yMin: PLANE.vMin, yMax: PLANE.vMax },
+      -getRig().H,
+    );
   }
 
   toPlane(x, y) {
-    const { scale, ox, oy, flip } = this.viewport;
-    return { u: (flip * (x - ox)) / scale, v: (oy - y) / scale };
-  }
-
-  pointerToCanvas(event) {
-    const rect = this.canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const p = this.fromPx(x, y);
+    return { u: p.x, v: p.y };
   }
 
   /** Keyframe handle under the cursor, if any. */
@@ -111,43 +68,25 @@ export class PlaneView {
     return best;
   }
 
-  bindPointer() {
-    const onDown = (event) => {
-      const { x, y } = this.pointerToCanvas(event);
-      // A hit on a handle grabs it; anywhere else grabs the keyframe nearest in
-      // time, so a plain drag always moves the pose you are looking at.
-      const index = this.pickKeyframe(x, y) ?? this.swing.nearestKeyframeIndex(this.store.state.t);
-      this.store.set({ t: this.swing.keys[index].t, playing: false, dragging: index });
-      this.canvas.setPointerCapture(event.pointerId);
-      this.applyDrag(x, y);
-    };
-
-    const onMove = (event) => {
-      const { x, y } = this.pointerToCanvas(event);
-      if (this.store.state.dragging !== null) {
-        this.applyDrag(x, y);
-      } else {
+  bindDrag() {
+    this.bindPointer({
+      onDown: (x, y) => {
+        // A hit on a handle grabs it; anywhere else grabs the keyframe nearest
+        // in time, so a plain drag always moves the pose you are looking at.
+        const index =
+          this.pickKeyframe(x, y) ?? this.swing.nearestKeyframeIndex(this.store.state.t);
+        this.store.set({ t: this.swing.keys[index].t, playing: false, dragging: index });
+        return true;
+      },
+      onDrag: (x, y) => this.applyDrag(x, y),
+      onUp: () => this.store.set({ dragging: null }),
+      onHover: (x, y) => {
         const hit = this.pickKeyframe(x, y);
         if (hit !== this.hover) {
           this.hover = hit;
-          this.canvas.style.cursor = hit === null ? 'crosshair' : 'grab';
+          this.setCursor(hit === null ? 'crosshair' : 'grab');
         }
-      }
-    };
-
-    const onUp = (event) => {
-      if (this.store.state.dragging !== null) this.store.set({ dragging: null });
-      if (this.canvas.hasPointerCapture?.(event.pointerId)) {
-        this.canvas.releasePointerCapture(event.pointerId);
-      }
-    };
-
-    this.canvas.addEventListener('pointerdown', onDown);
-    this.canvas.addEventListener('pointermove', onMove);
-    this.canvas.addEventListener('pointerup', onUp);
-    this.canvas.addEventListener('pointercancel', onUp);
-    this.canvas.addEventListener('pointerleave', () => {
-      this.hover = null;
+      },
     });
   }
 
@@ -168,7 +107,7 @@ export class PlaneView {
     const ctx = this.ctx;
     const { showPath, showGuides } = this.store.state;
 
-    ctx.clearRect(0, 0, this.w, this.h);
+    this.clear();
     this.drawRectangle(pose, showGuides);
     if (showGuides) this.drawReachGuides(pose);
     this.drawAxes(pose);

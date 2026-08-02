@@ -2,7 +2,7 @@
  * Minimal dependency-free 3D vector helpers.
  *
  * Vectors are plain `{x, y, z}` objects and every function is pure, so the
- * kinematics layer stays independent of any rendering library. The Three.js
+ * kinematics layers stay independent of any rendering library. The Three.js
  * view converts to `THREE.Vector3` only at the boundary.
  */
 

@@ -48,7 +48,10 @@ h1 {
 main {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  /* Two editable 2D panels and the scene. The scene takes the extra width: the
+     2D panels are charts with fixed aspect needs, the 3D view benefits from
+     every pixel. Below 1200px the wrist panel drops under the hand panel. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr);
   gap: 1px;
   background: var(--line);
   min-height: 0;
@@ -286,6 +289,28 @@ button.toggle-button {
 
   .pane {
     height: 58vh;
+  }
+}
+
+@media (max-width: 1200px) and (min-width: 981px) {
+  main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  #plane-pane {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #wrist-pane {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  #scene-pane {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 }
 

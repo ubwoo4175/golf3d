@@ -20,7 +20,8 @@
       <p class="sub">
         Drag on a torso-fixed rectangle; the perpendicular distance from it is solved so the
         locked arm stays straight. Left: the rectangle head-on, relative to the
-        elbow&nbsp;line. Right: the same motion in world space.
+        elbow&nbsp;line. Middle: the club's direction seen from the wrist. Right: the
+        same motion in world space.
       </p>
     </header>
 
@@ -38,6 +39,19 @@
           <li><i class="swatch dash lead"></i>lead reach limit</li>
           <li><i class="swatch dash trail"></i>trail reach limit</li>
           <li><i class="swatch ring"></i><span id="release-label">release</span></li>
+        </ul>
+      </section>
+
+      <section id="wrist-pane" class="pane">
+        <div class="pane-title">
+          <span>2D — wrist (club vs forearm)</span>
+          <span class="hint">drag the shaft · dial rolls the face</span>
+        </div>
+        <canvas id="wrist-canvas"></canvas>
+        <ul class="legend">
+          <li><i class="swatch" style="background: #e6eef8"></i>shaft</li>
+          <li><i class="swatch" style="background: #ffd166"></i>face</li>
+          <li>centre = club in&nbsp;line with the arm</li>
         </ul>
       </section>
 
@@ -72,7 +86,9 @@
 
       <div class="toggles">
         <button id="handedness" class="toggle-button">Right-handed</button>
-        <label><input type="checkbox" id="showPath" />3D path</label>
+        <label><input type="checkbox" id="showPath" />hand path</label>
+        <label><input type="checkbox" id="showClub" />club</label>
+        <label><input type="checkbox" id="showHeadPath" />clubhead path</label>
         <label><input type="checkbox" id="showPlane" />rectangle + ⊥ axis</label>
         <label><input type="checkbox" id="showLocalPath" />trace on rectangle</label>
         <label><input type="checkbox" id="showGuides" />reach guides</label>
@@ -89,6 +105,8 @@
         <div><dt title="hand offset from the rectangle, and its distance from the spine axis">⊥ offset</dt><dd id="r-offset">—</dd></div>
         <div><dt id="l-lead" title="lead elbow: extension · flex">lead</dt><dd id="r-lead">—</dd></div>
         <div><dt id="l-trail" title="trail elbow: extension · flex">trail</dt><dd id="r-trail">—</dd></div>
+        <div><dt title="wrist hinge between the shaft and the lead forearm, and its cock/bow split">wrist</dt><dd id="r-wrist">—</dd></div>
+        <div><dt title="clubface roll, and how far the head is from the ball">club</dt><dd id="r-club">—</dd></div>
       </dl>
     </footer>
 

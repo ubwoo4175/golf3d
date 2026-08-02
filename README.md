@@ -1,14 +1,16 @@
 # Golf Swing Hand Path — 3D Simulator
 
-Two synchronised views of how the hands move **relative to the torso** through a
-golf swing, shaped after Rory McIlroy's sequencing.
+Three synchronised views of how the hands and the club move **relative to the
+torso** through a golf swing, shaped after Rory McIlroy's sequencing.
 
 - **Left — 2D hand rectangle.** The torso-fixed rectangle seen head-on, relative
   to the elbow line. Drag here to reshape the swing.
+- **Middle — 2D wrist chart.** The club's direction relative to the lead forearm,
+  with the hand pinned at the centre. Drag the shaft; a dial rolls the face.
 - **Right — 3D world space.** The same motion with the torso rotating about a
-  fixed spine axis, plus the full-swing hand path.
+  fixed spine axis, plus the hand and clubhead paths.
 
-Both views read from a single normalised swing time `t`, so they can never drift
+All three read from a single normalised swing time `t`, so they can never drift
 out of step.
 
 ## Running it
@@ -65,6 +67,7 @@ Assumptions, per the spec:
 | Shoulders | Fixed to the top of the torso, so they rotate with it. |
 | Arms | Shoulder → elbow → hands, both hands meeting at one grip point. Shoulders + hands form the classic triangle. |
 | Hands | Dragged in 2D on a torso-fixed rectangle; the perpendicular distance off it is solved, not authored. |
+| Club | An orientation at the hand, not a linkage: wrist hinge in two axes plus a roll for the face. Its length is solved from the address pose. |
 
 ### Coordinates
 
@@ -468,6 +471,8 @@ direction. That is the transition float, and it is 0.9 cm.
 | Action | Effect |
 | --- | --- |
 | Drag on the 2D rectangle | Grabs the nearest keyframe handle, or the keyframe nearest the current time, and moves it. The 3D path reshapes live. |
+| Drag on the wrist chart | Aims the shaft: distance from the centre is the wrist hinge, direction is how it hinges. |
+| Drag the dial, bottom left of the wrist chart | Rolls the clubface about the shaft. |
 | Space | Play / pause |
 | ← / → | Step keyframe |
 | H, or the handedness button | Flip right- / left-handed |
@@ -482,44 +487,130 @@ time or torso angle.
 
 | File | Responsibility |
 | --- | --- |
-| `src/config.js` | Every tunable: anthropometrics, rectangle geometry, lock ratio, timing, palette. |
+| `src/config.js` | Every tunable: anthropometrics, rectangle geometry, lock ratio, timing, club, palette. |
 | `src/vec3.js` | Dependency-free vector maths on plain `{x,y,z}`. |
-| `src/kinematics.js` | The rig and handedness, torso basis, the perpendicular-axis solve, two-link arm IK. No rendering, no time. |
+| `src/rig.js` | **Spine.** Handedness, spine axis and tilt, the torso rotation, plane ↔ world. Knows nothing above it. |
+| `src/arm.js` | **Hand.** The arm rules that solve the perpendicular axis, and two-link elbow IK. |
+| `src/club.js` | **Club.** Wrist angles → shaft direction and face normal, and the inverse solve. |
+| `src/pose.js` | The composer: driving values in, one full world-space pose out. The only module that knows the whole chain. |
 | `src/swing.js` | Keyframe track, interpolation, phase segmentation, path sampling. |
-| `src/state.js` | The single observable store both views subscribe to. |
-| `src/view2d.js` | Canvas 2D rectangle view and drag editing. |
+| `src/state.js` | The single observable store all three views subscribe to. |
+| `src/canvas2d.js` | Shared plumbing for the two 2D panels: fit, hit-test, pointer capture, drag. |
+| `src/view2d.js` | The hand rectangle, head-on. |
+| `src/view-wrist.js` | The wrist chart and the face dial. |
 | `src/view3d.js` | Three.js scene. |
 | `src/main.js` | Wiring, controls, readouts, animation loop. |
 | `_config.yml`, `Gemfile` | Jekyll / GitHub Pages setup only. The app does not depend on them. |
 
-`kinematics.js` deliberately does not import Three.js — vectors convert to
-`THREE.Vector3` only at the rendering boundary, so the model stays testable and
-reusable.
+The chain runs strictly one way — `rig → arm → club → pose` — and none of those
+four import Three.js. Vectors convert to `THREE.Vector3` only at the rendering
+boundary, so the model stays testable from plain Node and reusable. That split is
+what let the club be added by writing one new model file and one new view, rather
+than by editing the kinematics.
 
-## Adding a club
+## The club and the wrist
 
-`solvePose()` returns a `handFrame` for exactly this:
+The club is not a linkage. The hands are one point in this model, so the club is
+an **orientation** — three numbers in a frame built at the hand from the two
+forearms:
 
-```js
-const { position, shaftDir, elbowLineDir } = pose.handFrame;
+```
+f   the lead forearm extended (elbow → hand). The shaft lies along this when the
+    wrist is neutral, so it is the zero of the hinge.
+n   normal to the plane of the two forearms — the bow/cup axis.
+r   completes the frame, in the plane of the forearms — the cock axis.
 ```
 
-- `position` — the grip point where both hands meet
-- `shaftDir` — a unit vector from the grip toward the clubhead, taken as the
-  natural extension of the lead arm
-- `elbowLineDir` — unit vector along the elbow line, a ready-made reference for
-  deriving clubface normal / shaft lean
+| Channel | Meaning |
+| --- | --- |
+| `cockDeg` | Hinge of the shaft away from the forearm, **in** the forearm plane. The wrist cock that sets the club. |
+| `bowDeg` | The same hinge, **out** of that plane. Bow / cup. |
+| `faceDeg` | Roll about the shaft's own axis. Turns the face. `0` is square at address. |
 
-A clubhead at `position + shaftDir * clubLength` is a one-liner. Note that until
-a club exists, the hands do not reach the ball marker in the 3D scene — the
-shaft is what closes that gap, which is why the ball sits where it does.
+### Why (cock, bow) and not (hinge, azimuth)
 
-Two things worth knowing before you build on this:
+The pair is the **exponential map** of the direction sphere about the forearm
+axis: total hinge is `hypot(cock, bow)` and its compass direction is
+`atan2(bow, cock)`. Two properties earn it its place.
 
-- `shaftDir` carries no roll, so it cannot express face angle on its own. Use
-  `elbowLineDir` (or forearm rotation, if you add it) to build a full frame.
-- The hands are one point. Modelling lead and trail hands separately means
-  splitting the grip point into two offsets along `shaftDir`.
+It is a **bijection** onto the sphere, so a 2D drag maps one-to-one onto a 3D
+direction. An orthographic projection of the shaft would have been two-to-one and
+needed a hidden sign bit to say which way the club leaned out of the screen.
+
+And it is **non-singular at zero hinge**, where the equivalent polar chart is not.
+That is not a fine point — it was a bug. Solving the defaults in
+`(hinge, azimuth)` gave azimuths that jumped by up to 270° between neighbouring
+keyframes, so the club spun through nonsense between checkpoints, purely because
+azimuth is ill-conditioned when the hinge is small, which at address and at
+release it is. In `(cock, bow)` those same keyframes are a few degrees apart and
+interpolate cleanly.
+
+The wrist panel is that chart drawn directly: hand pinned at the centre near the
+bottom, distance from it the hinge, direction from it the way it hinges. So the
+line from the centre to the handle **is** the shaft.
+
+### Where the club's defaults come from
+
+Same method as the tempo: solve what the P-system already defines, and only
+interpolate the rest. Seven of the twelve positions state where the *club* is,
+not where the wrist is, so the wrist angles are back-solved from that:
+
+| | Definition used | Result |
+| --- | --- | --- |
+| P1 | shaft points at the ball | head **on** the ball |
+| P2, P6 | *shaft parallel* — to the ground **and** the target line | shaft exactly (−1, 0, 0) |
+| P4 | 10° short of parallel at the top | |
+| P7 | shaft points at the ball | |
+| P8 | *follow-through shaft parallel* | shaft exactly (+1, 0, 0) |
+| P3, P5 | club vertical at lead-arm-parallel, lag retained coming down | |
+| P7.5 | released, in line with the lead arm | |
+
+`faceDeg` is solved to be **square** — face normal down the target line — at
+address and at impact, the only two moments where "square" is defined. Between
+them it interpolates, and because the face reference is parallel-transported along
+the shaft, that means the face simply stays square to the swing arc: no authored
+manipulation. Measured, the face comes out at −0.04° at address and +0.02° at
+impact.
+
+The club's **length is solved too**, not configured: it is the address hand's
+distance to the ball, so the head sits on the ball at address by construction. It
+therefore tracks the spine slider, which already stands for club length — 0.898 m
+at the driver end, 0.831 m at the default, 0.761 m at the wedge end.
+
+Independent checks the defaults were not tuned against:
+
+| | |
+| --- | --- |
+| Peak clubhead speed | **44.5 m/s, at t = 0.811** — impact. Tour driver ~50, 6-iron ~35. |
+| Peak shaft rotation | 2409°/s, against a `headSpeed / length` ceiling of 3047°/s |
+| Clubhead below ground | **never**; lowest point 0.021 m, which is the ball |
+
+### One thing the club does not fix
+
+**At impact the clubhead sits 8.2 cm short of the ball**, and the readout says so
+rather than hiding it. This is a real inconsistency the club *exposed* in the hand
+path, not one it introduced: the authored impact hand is 8.5 cm **higher** than the
+address hand, so no rigid club can touch a fixed ball at both. It is not fixable by
+moving things around, and that was checked rather than assumed —
+
+- no position for P7 within ±30 cm of where it sits satisfies the constraint;
+- no ball position works either: solving for a ball both hands can reach pushes it
+  98 cm away from the golfer and still leaves a 37 mm residual, on a 1.43 m club.
+
+Closing it means deciding that the impact hand should be lower, which is a change
+to the authored swing rather than to the club, so it is left alone. The address
+position is pinned instead, because that is where a club's length is *defined* —
+you pick the club that reaches the ball at setup.
+
+### Extending it
+
+- **Two hands.** Split the grip point into two offsets along `club.shaftDir`.
+- **Lie and loft.** `solveClub` returns `faceNormal` and `leadingEdge`
+  perpendicular to the shaft; a real head sits off the shaft axis and the face is
+  tilted back by the loft.
+- **A different club per shot.** `setClubLength` is already a runtime setter, and
+  `main.js` pins it to the address pose on every change — point it somewhere else
+  and everything downstream follows.
 
 ## Tuning
 
