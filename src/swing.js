@@ -18,6 +18,11 @@
  * Impact is NOT where the trail arm straightens -- it is still extending through
  * impact and only reaches full length at release.
  *
+ * THE CLUB. Every shaft direction the P-system names is ON PLANE -- no sideways
+ * component -- because the published checkpoints all read "shaft parallel to the
+ * target line". Authoring them with a sideways lean of 0.15 to 0.41 was what had
+ * the club wandering across itself at the top.
+ *
  * THE PATH SHAPE
  *   takeaway         a straight vertical line: u holds at 0 while v rises
  *   backswing        convex upward: bows ABOVE the chord from the takeaway to the top
@@ -101,36 +106,34 @@ export const REFERENCE_KEYFRAMES = [
   // both arms stay equally straight through it: a one-piece takeaway. The
   // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
   { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 11.4, bowDeg: 21.1, faceDeg: 0.0, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -17.3, bowDeg: 13.6, faceDeg: -5.5, label: 'P1.5 takeaway' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -39.7, bowDeg: 6.6, faceDeg: -5.5, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
   { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.8, bowDeg: 28.2, faceDeg: -7.1, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -14.3, bowDeg: 74.6, faceDeg: -8.8, label: 'P3 lead arm parallel' },
-  // P4's CLUB position is not something the P-system defines -- P4 is defined by
-  // 90 degrees of shoulder turn, not by where the club points. Authoring a "shaft
-  // parallel at the top" here was an invented constraint, and it cost 34 degrees
-  // of wrist hinge against 94 at P3 and 77 at P5: the wrists uncocked and
-  // re-cocked across the top, which dropped the clubhead 57 cm and lifted it 45
-  // again -- the extra loop. The hinge is instead solved to keep the head RISING
-  // into the top, at the bearing its neighbours share.
-  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: -10.8, bowDeg: 56.7, faceDeg: -15.1, label: 'P4 top, shoulders 90° away' },
+  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -0.9, bowDeg: 73.0, faceDeg: -8.8, label: 'P3 lead arm parallel' },
+  // The club at the top is SHORT OF PARALLEL and ON PLANE: 44 degrees above
+  // horizontal, pointing away from the target, with no sideways component. It is
+  // not vertical, and that is the correction -- an earlier version solved the top
+  // to keep the clubhead rising, which stood the club on end and left it pointing
+  // at the sky. The head still peaks here anyway, because the hands are rising
+  // faster than the club is laying back.
+  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: 27.9, bowDeg: 22.6, faceDeg: -15.1, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
   // keep drifting away from the target while the torso has already started down.
   // That is the transition float, and it is what opens the loop at the top --
   // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: -14.2, bowDeg: 75.6, faceDeg: -18.2, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: 2.7, bowDeg: 73.2, faceDeg: -18.2, label: 'P5 early downswing, lead arm parallel' },
   { t: 0.7767, thetaDeg: 0, u: -0.22, v: -0.3176, cockDeg: -39.1, bowDeg: 39.5, faceDeg: -19.3, label: 'P6 delivery, shaft parallel, square' },
   { t: 0.81, thetaDeg: -35, u: -0.1253, v: -0.3674, cockDeg: -13.3, bowDeg: 3.8, faceDeg: -20.1, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 9.2, bowDeg: -11.4, faceDeg: -20.6, label: 'P7.5 release, both arms straight' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 12.2, bowDeg: -16.7, faceDeg: -20.6, label: 'P7.5 release, both arms straight' },
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
   { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 27.5, bowDeg: 9.8, faceDeg: -21.1, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 23.5, bowDeg: 51.5, faceDeg: -21.7, label: 'P9 shoulders 90° to target' },
-  // The wrist chart is a true hemisphere, so the whole track has to stay inside
-  // 90 degrees of hinge -- the INTERPOLATED curve, not just the keyframes, which
-  // is why P3 and P10 sit at 76 and 82 rather than at 90. A cubic through
-  // keyframes that touch the rim overshoots it by up to 17 degrees. The club
-  // therefore folds less far back over the shoulder than a real finish does.
-  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 5.6, bowDeg: 81.8, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
+  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 17.8, bowDeg: 46.1, faceDeg: -21.7, label: 'P9 shoulders 90° to target' },
+  // The finish wants 168 degrees of hinge -- the club really does fold right back
+  // over the shoulder -- but the wrist chart is a hemisphere and holds 90, so it
+  // is capped at 82. That is the one place the model is knowingly short of the
+  // real thing.
+  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: -16.9, bowDeg: 80.2, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
 ];
 
 

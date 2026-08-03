@@ -647,32 +647,44 @@ to the authored swing rather than to the club, so it is left alone. The address
 position is pinned instead, because that is where a club's length is *defined* —
 you pick the club that reaches the ball at setup.
 
-### The loop at the top
+### The club through the top
 
-**P4's club position is not something the P-system defines.** P4 is defined by
-90° of *shoulder* turn — it says nothing about where the club points. Authoring a
-"shaft parallel at the top" there was an invented constraint, and it cost:
-it forced the wrist hinge down to 34° between 94° at P3 and 77° at P5, so the
-wrists **uncocked and re-cocked** across the top. Measured on the clubhead, that
-dropped it 57 cm and lifted it 45 cm again — an extra loop in the middle of the
-backswing.
+Two bugs put a tangle in the clubhead path here, and they were different bugs.
 
-The hinge is now solved instead to keep the clubhead *rising* into the top, at
-the bearing its two neighbours share so the wrist does not swing round either.
-The clubhead height profile goes from four alternating swings to three:
+**The shaft directions were off plane.** Every checkpoint the P-system names
+reads *"shaft parallel to the target line"* — at P2, P3, P4, P6 and P8 alike. The
+authored targets carried a sideways component of 0.15 to 0.41, so the club leaned
+across the swing plane and back again, and the head wandered sideways over the
+top. They are now all on plane: `z = 0`.
+
+**And the top was solved to keep the clubhead rising**, which stood the club on
+end. Measured, the shaft ran `(−0.05, +0.91, −0.41)` at P4 — pointing at the sky
+and tipped toward the golfer's back — and stayed near vertical for the whole of
+`t = 0.36 … 0.73`. That is not a top-of-backswing position.
+
+The top is now **short of parallel and on plane**: 44° above horizontal, pointing
+away from the target. The clubhead still peaks there anyway, because the hands
+rise faster than the club lays back:
+
+| | P3 | P4 (top) | P5 |
+| --- | --- | --- | --- |
+| Hand height | 1.11 m | 1.39 m | 1.16 m |
+| Shaft elevation | 63° | **44°** | 57° |
+| Clubhead height | 1.85 m | **1.97 m** | 1.77 m |
+
+Measured on the clubhead path, direction turns above 4° per step:
 
 | | Before | After |
 | --- | --- | --- |
-| Backswing | up 2.15 m, **down 57 cm, up 45 cm** | up 2.17 m |
-| Downswing | down 1.93 m | down 2.10 m |
-| Follow-through | up 2.17 m | up 2.25 m |
+| Through the top, `t` 0.36 – 0.73 | wandering, 5.7° at P4 | **none** |
+| At impact and release | 13.4°, 17.0° | 12.2°, 17.3° — the strike itself |
 
-The cost is that the shaft is no longer parallel to the target line at the top.
-That is not recoverable here: at this hand position the lead arm points close
-enough to the target line that a parallel shaft makes only ~30° with it, so
-"parallel at the top" and "wrists still cocked" cannot both hold. Raising the
-hand does not help — the hinge stays near 30° at any height, because the arm's
-bearing is set by the shoulder turn, not by how high the hands are.
+The turns that remain are at impact and just past it, where the head is doing
+50 m/s and genuinely swings through. The top is clean.
+
+One more correction fell out of the same pass: the head dipped 2.4 cm **below
+ground** in the takeaway, because P1.5's shaft pointed too steeply down. At −22°
+it grazes the turf instead, with the lowest point exactly at the ball's radius.
 
 ### And one the club change exposed
 
