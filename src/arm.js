@@ -18,8 +18,9 @@ import {
   ARM_LOCK_RATIO,
   ARM_CAP_RATIO,
   ELBOW_HINT,
+  ADDRESS,
 } from './config.js';
-import { SHOULDER_UV, getSpineTilt } from './rig.js';
+import { SHOULDER_UV } from './rig.js';
 
 // --- the arm rules ---------------------------------------------------------
 
@@ -111,24 +112,23 @@ export function solveAxisDistance(u, v, blend, ratio = ARM_LOCK_RATIO) {
  * about the shoulder centre, in the plane spanned by the spine axis and the chest
  * normal -- the sagittal plane you see the golfer's setup in from the side.
  *
- * The address point on that circle is where THE ARMS HANG PLUMB: the hand
- * directly below the shoulder centre in the side view. Working that through, the
- * angle round the circle comes out exactly equal to the forward spine tilt --
- *     v = -r * cos(tilt)      distance = r * sin(tilt)
- * -- which is why this reads the tilt rather than carrying an anchor constant of
- * its own. It used to; keeping the anchor FIXED across tilts meant the hand height
- * barely moved (7.7 cm across the whole range) while club length moved 26 cm, so
- * no club but one could reach the ball.
+ * The anchor is the point on that circle where the arms hang plumb at the WEDGE,
+ * `ADDRESS.anchorTiltDeg`:
+ *     v = -r * cos(anchorTilt)      distance = r * sin(anchorTilt)
  *
- * Now picking a longer club stands the golfer up, and the hands rise and move
- * away from the body with the torso -- all three together, as a real club change
- * does.
+ * It does NOT depend on the current spine tilt, and that is the point. Since
+ * (u, v) is fixed and the arm length is fixed, the perpendicular distance is
+ * fixed too -- the arm-length constraint ties all three together -- so the hand
+ * is completely fixed IN THE TORSO FRAME and no keyframe moves when the club
+ * changes. What changes is the world pose: the torso frame rotates and carries
+ * the whole arm assembly with it, so the hands rise and swing forward as the
+ * spine stands up toward the longer clubs. The ball moves to suit.
  */
 export function naturalAddress() {
   const target = ARM_LOCK_RATIO * REACH;
   const half = BODY.shoulderWidth / 2;
   const radius = Math.sqrt(Math.max(0, target * target - half * half));
-  const angle = V.rad(getSpineTilt());
+  const angle = V.rad(ADDRESS.anchorTiltDeg);
   return {
     u: 0,
     v: -radius * Math.cos(angle),

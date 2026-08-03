@@ -155,14 +155,22 @@ carries over unchanged onto the smaller frame.
 The **club** slider replaces the old spine-tilt slider. Six detents, and the club
 owns the address: its spine angle, its length, and where the ball sits.
 
-| Club | Length | Lie | Spine tilt | Hand height | Ball from axis |
-| --- | --- | --- | --- | --- | --- |
-| Wedge | 35.25″ | 64.5° | 40° | 0.707 m | 0.727 m |
-| Short iron | 36.0″ | 64.0° | 38° | 0.718 m | 0.732 m |
-| Mid iron | 37.0″ | 62.5° | 35° | 0.733 m | 0.734 m |
-| Long iron | 38.5″ | 61.0° | 32° | 0.748 m | 0.760 m |
-| Fairway wood | 43.0″ | 56.5° | 28° | 0.765 m | 0.893 m |
-| Driver | 45.5″ | 56.0° | 25° | 0.777 m | 0.983 m |
+**The hand does not move.** P1 sits at the same `(u, v)` on the rectangle for
+every club — `u = 0.0, v = −46.7 cm` — so changing club never touches a keyframe
+and the authored swing is untouched. The anchor is where the arms hang plumb at
+the **wedge**, and everything else follows from the torso frame rotating
+underneath it: pick a longer club, the spine stands up, and the hands rise and
+move *forward*, from plumb at the wedge to 15.8 cm ahead of plumb at the driver.
+The ball is what moves.
+
+| Club | Length | Lie | Spine tilt | Hand height | Hands ahead of plumb | Ball from axis |
+| --- | --- | --- | --- | --- | --- | --- |
+| Wedge | 35.25″ | 64.5° | 40° | 0.707 m | 0.0 cm | 0.727 m |
+| Short iron | 36.0″ | 64.0° | 38° | 0.718 m | +2.1 cm | 0.752 m |
+| Mid iron | 37.0″ | 62.5° | 35° | 0.736 m | +5.3 cm | 0.783 m |
+| Long iron | 38.5″ | 61.0° | 32° | 0.754 m | +8.5 cm | 0.836 m |
+| Fairway wood | 43.0″ | 56.5° | 28° | 0.778 m | +12.7 cm | 1.004 m |
+| Driver | 45.5″ | 56.0° | 25° | 0.797 m | +15.8 cm | 1.121 m |
 
 Lengths and lies are **standard men's specs**. Rory plays standard length, so
 these are his lengths; his own lie tolerances are not public. The spine tilts come
@@ -170,33 +178,25 @@ from published tour address ranges — longer club, more upright — and are the
 column here that is a range rather than a spec, because per-club spine angle is
 not something his team has released.
 
-Everything else in the table is **solved**. Two rules do it:
-
-1. **The arms hang plumb at address** — hand directly below the shoulder centre
-   in the side view.
-2. **The club soles at the ball**, its head on the ground (teed, for the driver).
-
-Working the first through, the arm's angle round its constraint circle comes out
-exactly equal to the spine tilt, which is why there is no longer a separate
-`anchorTiltDeg` to keep in sync. The second then fixes the ball's distance.
-
-Measured, all six clubs sole within **0.9 cm** of the ball at address, with the
-face square to within 1.4°.
+`ballForward` is **solved**: given the fixed address hand and the club's length,
+it is where the head reaches the ground. Measured, all six clubs sole within
+**0.9 cm** of the ball at address, with the face square to within 3.5°.
 
 #### What had to give
 
-Insisting on the standard *lie angle* at address as well over-determines it —
-three constraints, two freedoms. The lie is what gives, and the model's address
-shaft comes out about **5° flatter than spec for the irons and 13° for the
-driver**. That is closer to how a shaft actually looks at address than the spec
-number is: spec lie is a static measurement with the sole flat, not a posture.
+Insisting on the standard *lie angle* at address as well over-determines it. The
+lie is what gives, and the model's address shaft comes out about **5° flatter
+than spec for the irons and 11° for the driver**. That is closer to how a shaft
+actually looks at address than the spec number is: spec lie is a static
+measurement with the sole flat, not a posture.
 
-An earlier attempt kept the old **fixed** arm anchor and solved the spine tilt
-from the club instead. It gave the driver a 12.9° spine angle — nobody addresses
-a driver that upright. The cause was structural: with the anchor fixed, hand
-height moves only 7.7 cm across the whole tilt range while club length moves
-26 cm, so the only way to reach a long club's ball was to stand the golfer up.
-Hanging the arms plumb per club is what fixed it.
+Two approaches were tried and rejected on the way here. Solving the *spine tilt*
+from the club gave the driver a 12.9° spine angle — nobody addresses a driver
+that upright. Re-hanging the arms plumb at *every* club fixed that, but then P1
+moved several centimetres between clubs, which meant translating the whole
+authored path to follow it, which in turn tore the takeaway off its own start:
+660 of 4000 samples ended up outside the free-arm limit. Holding the anchor at
+the wedge and moving the ball instead has neither problem.
 
 ### The arm rules
 
@@ -587,10 +587,11 @@ not where the wrist is, so the wrist angles are back-solved from that:
 | --- | --- | --- |
 | P1 | shaft points at the ball | head **on** the ball |
 | P2, P6 | *shaft parallel* — to the ground **and** the target line | shaft exactly (−1, 0, 0) |
-| P4 | 10° short of parallel at the top | |
+| P4 | *not authored* — see below | |
 | P7 | shaft points at the ball | |
 | P8 | *follow-through shaft parallel* | shaft exactly (+1, 0, 0) |
 | P3, P5 | club vertical at lead-arm-parallel, lag retained coming down | |
+| P4 | solved to keep the clubhead **rising** into the top | no loop |
 | P7.5 | released, in line with the lead arm | |
 
 `faceDeg` is solved to be **square** — face normal down the target line — at
@@ -629,6 +630,33 @@ Closing it means deciding that the impact hand should be lower, which is a chang
 to the authored swing rather than to the club, so it is left alone. The address
 position is pinned instead, because that is where a club's length is *defined* —
 you pick the club that reaches the ball at setup.
+
+### The loop at the top
+
+**P4's club position is not something the P-system defines.** P4 is defined by
+90° of *shoulder* turn — it says nothing about where the club points. Authoring a
+"shaft parallel at the top" there was an invented constraint, and it cost:
+it forced the wrist hinge down to 34° between 94° at P3 and 77° at P5, so the
+wrists **uncocked and re-cocked** across the top. Measured on the clubhead, that
+dropped it 57 cm and lifted it 45 cm again — an extra loop in the middle of the
+backswing.
+
+The hinge is now solved instead to keep the clubhead *rising* into the top, at
+the bearing its two neighbours share so the wrist does not swing round either.
+The clubhead height profile goes from four alternating swings to three:
+
+| | Before | After |
+| --- | --- | --- |
+| Backswing | up 2.15 m, **down 57 cm, up 45 cm** | up 2.17 m |
+| Downswing | down 1.93 m | down 2.10 m |
+| Follow-through | up 2.17 m | up 2.25 m |
+
+The cost is that the shaft is no longer parallel to the target line at the top.
+That is not recoverable here: at this hand position the lead arm points close
+enough to the target line that a parallel shaft makes only ~30° with it, so
+"parallel at the top" and "wrists still cocked" cannot both hold. Raising the
+hand does not help — the hinge stays near 30° at any height, because the arm's
+bearing is set by the shoulder turn, not by how high the hands are.
 
 ### And one the club change exposed
 

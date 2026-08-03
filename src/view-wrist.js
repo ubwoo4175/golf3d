@@ -11,18 +11,20 @@
  *   +X   the cock axis  -- hinging in the plane of the two forearms
  *   +Z   the bow axis   -- hinging out of that plane
  *
- * THE CHART is the horizontal disk at the hand, perpendicular to the forearm: an
- * azimuthal-equidistant map of the direction sphere, so distance from the centre
- * is the hinge angle (the rings are 30 / 60 / 90 / 120 / 150 degrees) and the
- * direction round it is how the club hinges. Its Cartesian coordinates are
- * exactly the stored `(cockDeg, bowDeg)` channels -- see the exponential-map note
- * in club.js for why the pair is stored that way round.
+ * THE DOME is the surface the clubhead sweeps: every direction the shaft can
+ * point, at one shaft length from the hand. It is drawn hollow-side-down over the
+ * hand, and the clubhead sits ON it, so the handle you drag and the clubhead are
+ * the same object. The rings are hinge latitudes at 30 / 60 / 90 / 120 / 150
+ * degrees from the forearm axis.
  *
- * You drag the handle on that disk and the club, drawn in 3D above it, follows.
- * The interaction is unchanged from the flat version: the disk is the same chart,
- * a ray-cast onto it replaces the old screen-to-chart mapping, and the drag stays
- * one-to-one with a 3D direction where an orthographic projection of the club
- * would have been two-to-one.
+ * The camera looks at the hand from the front with the forearm running DOWN the
+ * screen, which is the framing the flat version had and the one that reads as a
+ * wrist rather than as a chart. Dragging ray-casts onto the dome, so the clubhead
+ * goes where the cursor goes.
+ *
+ * That mapping is still one-to-one with `(cockDeg, bowDeg)` -- the stored pair is
+ * the dome point in azimuthal-equidistant coordinates. See the exponential-map
+ * note in club.js for why the pair is stored that way round.
  *
  * A 2D overlay carries the text and the face dial. Roll about the shaft is the
  * third degree of freedom, and having no direction of its own it has nowhere to
@@ -38,12 +40,10 @@ import { phaseAt, RELEASE_T } from './swing.js';
 import { clamp } from './vec3.js';
 
 const GRAB_RADIUS_PX = 15;
-/** Chart radius in degrees, and the world radius it is drawn at. */
+/** How far the wrist can hinge, and the dome radius, which is the shaft length. */
 const MAX_DEG = 150;
-const CHART_RADIUS = 0.8;
-const DEG = CHART_RADIUS / MAX_DEG;
-const RINGS = [30, 60, 90, 120, 150];
 const SHAFT_LEN = 0.95;
+const RINGS = [30, 60, 90, 120, 150];
 const FOREARM_LEN = 0.45;
 const DIAL_RADIUS = 30;
 const DIAL_INSET = 46;
@@ -73,11 +73,14 @@ export class WristView {
     // tall and narrow, so a hard-coded distance that looks right on one shape
     // clips the chart on another.
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.05, 40);
-    this.viewDir = new THREE.Vector3(0.52, 0.5, 0.95).normalize();
-    this.target = v3(0, 0.18, 0);
+    // From the front and a little above: the forearm runs down the screen and the
+    // club stands up out of the dome. Straight down the forearm axis would put
+    // the club end-on and foreshorten it to a dot.
+    this.viewDir = new THREE.Vector3(0.30, 0.34, 1.0).normalize();
+    this.target = v3(0, 0.3, 0);
 
     this.raycaster = new THREE.Raycaster();
-    this.chartPlane = new THREE.Plane(v3(0, 1, 0), 0);
+    this.domeRadius = SHAFT_LEN;
 
     this.build();
     this.resize();
@@ -92,24 +95,35 @@ export class WristView {
     key.position.set(2, 3, 2);
     this.scene.add(key);
 
-    // The chart: filled disk, hinge rings, spokes.
-    const disk = new THREE.Mesh(
-      new THREE.CircleGeometry(CHART_RADIUS, 64),
-      new THREE.MeshBasicMaterial({
-        color: '#16233a',
-        transparent: true,
-        opacity: 0.55,
-        side: THREE.DoubleSide,
-      }),
+    // The dome: every direction the shaft can point, at one shaft length. Drawn
+    // double-sided and faint so the club reads whether it is in front of the
+    // surface or behind it.
+    this.scene.add(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(SHAFT_LEN, 48, 32, 0, Math.PI * 2, 0, (MAX_DEG * Math.PI) / 180),
+        new THREE.MeshBasicMaterial({
+          color: '#16233a',
+          transparent: true,
+          opacity: 0.4,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      ),
     );
-    disk.rotation.x = -Math.PI / 2;
-    this.scene.add(disk);
 
+    // Hinge latitudes, and meridians every 30 degrees of bearing.
     for (const deg of RINGS) {
+      const a = (deg * Math.PI) / 180;
       const pts = [];
       for (let i = 0; i <= 96; i += 1) {
-        const a = (i / 96) * Math.PI * 2;
-        pts.push(v3(Math.cos(a) * deg * DEG, 0, Math.sin(a) * deg * DEG));
+        const b = (i / 96) * Math.PI * 2;
+        pts.push(
+          v3(
+            SHAFT_LEN * Math.sin(a) * Math.cos(b),
+            SHAFT_LEN * Math.cos(a),
+            SHAFT_LEN * Math.sin(a) * Math.sin(b),
+          ),
+        );
       }
       this.scene.add(
         new THREE.Line(
@@ -117,20 +131,27 @@ export class WristView {
           new THREE.LineBasicMaterial({
             color: '#4a6080',
             transparent: true,
-            opacity: deg === 90 ? 0.7 : 0.35,
+            opacity: deg === 90 ? 0.75 : 0.35,
           }),
         ),
       );
     }
-    const spokes = [];
-    for (let a = 0; a < 360; a += 30) {
-      const r = CHART_RADIUS;
-      spokes.push(v3(0, 0, 0), v3(Math.cos((a * Math.PI) / 180) * r, 0, Math.sin((a * Math.PI) / 180) * r));
+    const meridians = [];
+    for (let b = 0; b < 360; b += 30) {
+      const r = (b * Math.PI) / 180;
+      for (let i = 0; i < 24; i += 1) {
+        const a0 = ((MAX_DEG * i) / 24) * (Math.PI / 180);
+        const a1 = ((MAX_DEG * (i + 1)) / 24) * (Math.PI / 180);
+        meridians.push(
+          v3(SHAFT_LEN * Math.sin(a0) * Math.cos(r), SHAFT_LEN * Math.cos(a0), SHAFT_LEN * Math.sin(a0) * Math.sin(r)),
+          v3(SHAFT_LEN * Math.sin(a1) * Math.cos(r), SHAFT_LEN * Math.cos(a1), SHAFT_LEN * Math.sin(a1) * Math.sin(r)),
+        );
+      }
     }
     this.scene.add(
       new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(spokes),
-        new THREE.LineBasicMaterial({ color: '#33415c', transparent: true, opacity: 0.5 }),
+        new THREE.BufferGeometry().setFromPoints(meridians),
+        new THREE.LineBasicMaterial({ color: '#33415c', transparent: true, opacity: 0.4 }),
       ),
     );
 
@@ -154,18 +175,6 @@ export class WristView {
     this.scene.add(this.headGroup);
     this.buildHead();
 
-    // Handle on the chart, and the line joining it to the clubhead.
-    this.handle = new THREE.Mesh(
-      new THREE.SphereGeometry(0.042, 18, 14),
-      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3 }),
-    );
-    this.scene.add(this.handle);
-    this.link = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([v3(0, 0, 0), v3(0, 0, 0)]),
-      new THREE.LineDashedMaterial({ color: '#7fd4ff', dashSize: 0.05, gapSize: 0.04 }),
-    );
-    this.scene.add(this.link);
-
     this.track = new THREE.Group();
     this.scene.add(this.track);
     this.markers = new THREE.Group();
@@ -187,12 +196,12 @@ export class WristView {
       new THREE.BoxGeometry(length * s, height * s, depth * s),
       new THREE.MeshStandardMaterial({ color: '#c8d2de', roughness: 0.35, metalness: 0.6 }),
     );
-    body.position.set(length * s * 0.32, -height * s * 0.3, 0);
+    body.position.set(length * s * 0.32, height * s * 0.35, 0);
     const face = new THREE.Mesh(
       new THREE.BoxGeometry(length * s * 0.92, height * s * 0.86, 0.008),
       new THREE.MeshStandardMaterial({ color: COLORS.face, roughness: 0.5 }),
     );
-    face.position.set(length * s * 0.32, -height * s * 0.3, (depth * s) / 2 + 0.005);
+    face.position.set(length * s * 0.32, height * s * 0.35, (depth * s) / 2 + 0.005);
     this.headGroup.add(body, face);
   }
 
@@ -211,27 +220,34 @@ export class WristView {
   }
 
   /**
-   * A (cock, bow) pair as a point on the chart disk. The horizontal axis is
-   * mirrored with handedness, the same as the hand panel, so a cock toward the
-   * trail side falls on the same side of the screen in both.
+   * Where a (cock, bow) pair puts the clubhead: a point on the dome. The
+   * horizontal axis is mirrored with handedness, the same as the hand panel, so
+   * a cock toward the trail side falls on the same side of the screen in both.
    */
   chartPoint(cockDeg, bowDeg) {
-    return v3(-getRig().H * cockDeg * DEG, 0, -bowDeg * DEG);
+    return this.tipFor(cockDeg, bowDeg);
   }
 
-  /** Inverse of `chartPoint`. */
-  chartToWrist(p) {
-    return { cockDeg: (-getRig().H * p.x) / DEG, bowDeg: -p.z / DEG };
-  }
-
-  /** The shaft tip for a wrist pair, in view space. */
-  tipFor(cockDeg, bowDeg) {
-    const frame = {
+  /** The view-space frame the dome is drawn in. */
+  viewFrame() {
+    return {
       f: { x: 0, y: 1, z: 0 },
       r: { x: -getRig().H, y: 0, z: 0 },
       n: { x: 0, y: 0, z: -1 },
     };
-    const d = shaftDirection(frame, cockDeg, bowDeg);
+  }
+
+  /** Inverse of `chartPoint`: a point on the dome back to the stored pair. */
+  chartToWrist(p) {
+    const d = p.clone().normalize();
+    const hinge = (Math.acos(clamp(d.y, -1, 1)) * 180) / Math.PI;
+    const az = Math.atan2(-d.z, -getRig().H * d.x);
+    return { cockDeg: hinge * Math.cos(az), bowDeg: hinge * Math.sin(az) };
+  }
+
+  /** The shaft tip for a wrist pair, in view space. */
+  tipFor(cockDeg, bowDeg) {
+    const d = shaftDirection(this.viewFrame(), cockDeg, bowDeg);
     return v3(d.x, d.y, d.z).multiplyScalar(SHAFT_LEN);
   }
 
@@ -280,11 +296,9 @@ export class WristView {
     const pts = [v3(0, -FOREARM_LEN, 0)];
     for (let a = 0; a < 360; a += 20) {
       const r = (a * Math.PI) / 180;
-      pts.push(v3(Math.cos(r) * CHART_RADIUS, 0, Math.sin(r) * CHART_RADIUS));
-      // The club's reachable cone, so no hinge angle can push it out of frame.
+      // The whole dome, so no hinge angle can push the club out of frame.
       for (const hinge of [0, 45, 90, 135, MAX_DEG]) {
-        const t = this.tipFor(hinge * Math.cos(r), hinge * Math.sin(r));
-        pts.push(t);
+        pts.push(this.tipFor(hinge * Math.cos(r), hinge * Math.sin(r)));
       }
     }
 
@@ -317,14 +331,32 @@ export class WristView {
     return { x: ((v.x + 1) / 2) * this.w, y: ((1 - v.y) / 2) * this.h };
   }
 
-  /** Where the pointer ray meets the chart disk, in view space. */
+  /**
+   * Where the pointer ray meets the dome, in view space.
+   *
+   * A ray that misses the dome is projected onto its silhouette rather than
+   * ignored, so dragging past the edge slides along the rim instead of sticking.
+   */
   rayToChart(x, y) {
     this.raycaster.setFromCamera(
       new THREE.Vector2((x / this.w) * 2 - 1, -(y / this.h) * 2 + 1),
       this.camera,
     );
-    const hit = new THREE.Vector3();
-    return this.raycaster.ray.intersectPlane(this.chartPlane, hit) ? hit : null;
+    const { origin: o, direction: d } = this.raycaster.ray;
+    const R = this.domeRadius;
+    const b = 2 * o.dot(d);
+    const c = o.lengthSq() - R * R;
+    const disc = b * b - 4 * c;
+    if (disc <= 0) {
+      const t = -o.dot(d);
+      return o.clone().addScaledVector(d, t).normalize().multiplyScalar(R);
+    }
+    const root = Math.sqrt(disc);
+    const t1 = (-b - root) / 2;
+    const t2 = (-b + root) / 2;
+    // The near hit is the front of the dome, which is what the cursor is over.
+    const t = t1 > 0 ? t1 : t2;
+    return o.clone().addScaledVector(d, t);
   }
 
   pickKeyframe(x, y) {
@@ -418,10 +450,8 @@ export class WristView {
 
   draw(pose) {
     const { cockDeg, bowDeg, faceDeg } = pose.wrist;
-    const club = pose.club;
 
     const tip = this.tipFor(cockDeg, bowDeg);
-    const chart = this.chartPoint(cockDeg, bowDeg);
 
     this.shaft.position.set(0, 0, 0);
     this.shaft.quaternion.setFromUnitVectors(v3(0, 1, 0), tip.clone().normalize());
@@ -444,16 +474,9 @@ export class WristView {
       new THREE.Matrix4().makeBasis(leading, headUp, faceNormal),
     );
 
-    this.handle.position.copy(chart);
-    const link = this.link.geometry.attributes.position;
-    link.setXYZ(0, chart.x, chart.y, chart.z);
-    link.setXYZ(1, tip.x, tip.y, tip.z);
-    link.needsUpdate = true;
-    this.link.computeLineDistances();
-
     this.refreshTrack();
     this.renderer.render(this.scene, this.camera);
-    this.drawOverlay(pose, club);
+    this.drawOverlay(pose);
   }
 
   /** The wrist track and the keyframe markers, rebuilt when the swing changes. */
@@ -498,7 +521,7 @@ export class WristView {
     });
   }
 
-  drawOverlay(pose, club) {
+  drawOverlay(pose) {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
     const label = (text, x, y, opts = {}) => {

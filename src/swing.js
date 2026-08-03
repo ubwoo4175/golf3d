@@ -100,25 +100,32 @@ export const REFERENCE_KEYFRAMES = [
   // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
   // both arms stay equally straight through it: a one-piece takeaway. The
   // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4305, cockDeg: 11.0, bowDeg: 26.4, faceDeg: 0.0, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -18.1, bowDeg: 21.0, faceDeg: -3.6, label: 'P1.5 takeaway' },
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 11.4, bowDeg: 21.1, faceDeg: 0.0, label: 'P1 address' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -17.3, bowDeg: 13.6, faceDeg: -5.5, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
-  { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.7, bowDeg: 32.4, faceDeg: -4.7, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -26.5, bowDeg: 93.8, faceDeg: -5.8, label: 'P3 lead arm parallel' },
-  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: 33.3, bowDeg: -6.5, faceDeg: -10.0, label: 'P4 top, shoulders 90° away' },
+  { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.8, bowDeg: 28.2, faceDeg: -7.1, label: 'P2 shaft parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -17.6, bowDeg: 91.9, faceDeg: -8.8, label: 'P3 lead arm parallel' },
+  // P4's CLUB position is not something the P-system defines -- P4 is defined by
+  // 90 degrees of shoulder turn, not by where the club points. Authoring a "shaft
+  // parallel at the top" here was an invented constraint, and it cost 34 degrees
+  // of wrist hinge against 94 at P3 and 77 at P5: the wrists uncocked and
+  // re-cocked across the top, which dropped the clubhead 57 cm and lifted it 45
+  // again -- the extra loop. The hinge is instead solved to keep the head RISING
+  // into the top, at the bearing its neighbours share.
+  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: -10.8, bowDeg: 56.7, faceDeg: -15.1, label: 'P4 top, shoulders 90° away' },
   // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
   // keep drifting away from the target while the torso has already started down.
   // That is the transition float, and it is what opens the loop at the top --
   // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: -22.8, bowDeg: 76.4, faceDeg: -12.0, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.7767, thetaDeg: 0, u: -0.22, v: -0.3176, cockDeg: -40.3, bowDeg: 37.8, faceDeg: -12.8, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.81, thetaDeg: -35, u: -0.1253, v: -0.3674, cockDeg: -6.2, bowDeg: 12.4, faceDeg: -13.3, label: 'P7 impact' },
+  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: -14.2, bowDeg: 75.6, faceDeg: -18.2, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7767, thetaDeg: 0, u: -0.22, v: -0.3176, cockDeg: -39.1, bowDeg: 39.5, faceDeg: -19.3, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.81, thetaDeg: -35, u: -0.1253, v: -0.3674, cockDeg: -13.3, bowDeg: 3.8, faceDeg: -20.1, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 9.8, bowDeg: -3.2, faceDeg: -13.7, label: 'P7.5 release, both arms straight' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 9.2, bowDeg: -11.4, faceDeg: -20.6, label: 'P7.5 release, both arms straight' },
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
-  { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 25.9, bowDeg: 17.2, faceDeg: -14.0, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 21.6, bowDeg: 57.5, faceDeg: -14.4, label: 'P9 shoulders 90° to target' },
-  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 37.6, bowDeg: 149.7, faceDeg: -16.4, label: 'P10 finish, shoulders 120°' },
+  { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 27.5, bowDeg: 9.8, faceDeg: -21.1, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 23.5, bowDeg: 51.5, faceDeg: -21.7, label: 'P9 shoulders 90° to target' },
+  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 10.1, bowDeg: 148.3, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -220,30 +227,17 @@ export class SwingPath {
   }
 
   /**
-   * Put the address hand where the club's setup wants it, and TRANSLATE THE WHOLE
-   * PATH with it.
+   * Snap P1 back to the anchored address.
    *
-   * Moving P1 alone would be wrong. The address moves several centimetres between
-   * a wedge and a driver, and leaving P2..P10 behind tears the takeaway off its
-   * own start: the P1 -> P1.5 segment grows past the straight-line cutoff, the
-   * curve that replaces it bulges `u` positive, and a positive `u` with the lead
-   * arm locked is a pose the arm rules forbid. Measured, that alone put 660 of
-   * 4000 samples outside the free-arm limit and left a 79000 rad/m spike in the
-   * hand path.
-   *
-   * Translating instead keeps the authored shape exactly and just relocates it,
-   * which is also the physical statement: a longer club raises the whole hand
-   * path, it does not reshape it.
+   * P1 only -- nothing else moves. The anchor is the same (u, v) for every club,
+   * so in practice this is a no-op except after a drag or a reset. An earlier
+   * version re-hung the arms plumb per club and had to translate the whole path
+   * to follow; holding the anchor fixed removes the need entirely.
    */
   applyNaturalAddress() {
     const { u, v } = naturalAddress();
-    const du = u - this.keys[0].u;
-    const dv = v - this.keys[0].v;
-    if (du === 0 && dv === 0) return;
-    for (const k of this.keys) {
-      k.u += du;
-      k.v += dv;
-    }
+    this.keys[0].u = u;
+    this.keys[0].v = v;
   }
 
   /**
@@ -258,12 +252,11 @@ export class SwingPath {
   /**
    * Aim the address club at the ball.
    *
-   * Unlike the address HAND, which is anchored at a tilt-invariant point on the
-   * rectangle, the address WRIST cannot be held constant across spine tilts: the
-   * forearm swings as the torso frame rotates, so the same (cock, bow) aims the
-   * shaft somewhere new. Holding the numbers fixed left the clubhead 20-24 cm
-   * off the ball at the ends of the slider's range. So the address wrist is
-   * derived rather than authored, and re-derived whenever the tilt moves.
+   * The address HAND is anchored and never moves, but the address WRIST still
+   * has to be re-derived per club: the torso frame rotates underneath it, so the
+   * same (cock, bow) aims the shaft somewhere new, and the ball has moved as
+   * well. Holding the numbers fixed left the clubhead well off the ball at the
+   * ends of the range.
    */
   applyAddressClub() {
     const pose = this.poseAt(this.keys[0].t);

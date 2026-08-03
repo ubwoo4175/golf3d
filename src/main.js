@@ -98,6 +98,10 @@ $('reset-camera').addEventListener('click', () => sceneView.resetCamera());
 function applyHandedness(handedness) {
   setHandedness(handedness);
   store.set({ handedness });
+  // The ball mirrors with the golfer, so the address club has to be re-aimed at
+  // it -- without this the flip left the head 70 cm off the ball.
+  syncToAddress();
+  swing.applyAddressClub();
   swing.emit(); // world positions changed, so drop the cached path
   planeView.layout(); // the horizontal axes follow handedness in both panels
   wristView.layout();

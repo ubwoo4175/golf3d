@@ -159,16 +159,25 @@ export const ELBOW_HINT = {
 /**
  * The address position.
  *
- * The arms hang PLUMB at address -- the hand directly below the shoulder centre
- * in the side view. That single rule replaces the old fixed anchor, and it makes
- * the anchor angle equal the spine tilt exactly, which is why there is no longer
- * a separate `anchorTiltDeg` to keep in sync: `naturalAddress()` reads the tilt.
+ * The address hand is ANCHORED at a FIXED point on the rectangle -- the same
+ * (u, v) for every club. The anchor is where the arms hang plumb at the WEDGE,
+ * the shortest club and the most bent-over setup.
  *
- * The consequence is that picking a longer club stands the golfer up, which
- * raises the hands and pushes the ball further away -- all three move together,
- * which is what a real change of club does.
+ * Everything else follows from the torso frame rotating underneath it. Pick a
+ * longer club, the spine stands up, and the whole arm assembly rotates with it:
+ * the hands rise and move FORWARD, from plumb at the wedge to 15.8 cm ahead of
+ * plumb at the driver. That is the real behaviour, and it costs nothing in the
+ * model -- because (u, v) never changes, no keyframe ever moves when you change
+ * club, and the authored swing is untouched.
+ *
+ * The ball is what moves instead: it is placed where the club actually reaches.
+ * A brief experiment had this the other way round, with the arms re-hung plumb
+ * per club and the whole path translated to follow; that shifted P1 by several
+ * centimetres between clubs and tore the takeaway off its own start.
  */
 export const ADDRESS = {
+  /** The tilt at which the arms hang plumb, which is the wedge's own setup. */
+  anchorTiltDeg: 40,
   /** Butt of the club to the midpoint of the two hands on the grip. */
   gripDown: 0.1,
 };
@@ -185,12 +194,12 @@ export const ADDRESS = {
  * published RANGE rather than a spec, because per-club spine angle is not
  * something Rory's team has released.
  *
- * `ballForward` and the emergent shaft angle are SOLVED from the other two plus
- * the arms hanging plumb, not authored. See the club section of the README: the
- * solve is over-determined if you also insist on the standard lie at address, so
- * the lie is what gives, coming out 5 degrees flatter than spec for the irons and
- * 13 flatter for the driver -- which is closer to how a shaft actually looks at
- * address than the static spec number is.
+ * `ballForward` is SOLVED, not authored: given the fixed address hand and the
+ * club's length, it is where the head reaches the ground. See the club section of
+ * the README. The emergent shaft angle comes out 5 degrees flatter than the spec
+ * lie for the irons and 11 flatter for the driver -- which is closer to how a
+ * shaft actually looks at address than the static spec number is, that being a
+ * measurement with the sole flat rather than a posture.
  *
  * Head dimensions are real proportions in metres: toe-to-heel, crown-to-sole,
  * face-to-back.
@@ -200,19 +209,19 @@ export const CLUBS = [
     ballHeight: 0.021, ballForward: 0.727, ballLateral: -0.02,
     type: 'iron', head: { length: 0.080, height: 0.058, depth: 0.025 } },
   { id: 'shortIron', label: 'Short iron', lengthIn: 36, lieDeg: 64, spineTiltDeg: 38,
-    ballHeight: 0.021, ballForward: 0.732, ballLateral: 0.0,
+    ballHeight: 0.021, ballForward: 0.752, ballLateral: 0.0,
     type: 'iron', head: { length: 0.078, height: 0.054, depth: 0.023 } },
   { id: 'midIron', label: 'Mid iron', lengthIn: 37, lieDeg: 62.5, spineTiltDeg: 35,
-    ballHeight: 0.021, ballForward: 0.734, ballLateral: 0.03,
+    ballHeight: 0.021, ballForward: 0.783, ballLateral: 0.03,
     type: 'iron', head: { length: 0.078, height: 0.052, depth: 0.022 } },
   { id: 'longIron', label: 'Long iron', lengthIn: 38.5, lieDeg: 61, spineTiltDeg: 32,
-    ballHeight: 0.021, ballForward: 0.76, ballLateral: 0.06,
+    ballHeight: 0.021, ballForward: 0.836, ballLateral: 0.06,
     type: 'iron', head: { length: 0.080, height: 0.050, depth: 0.021 } },
   { id: 'wood', label: 'Fairway wood', lengthIn: 43, lieDeg: 56.5, spineTiltDeg: 28,
-    ballHeight: 0.021, ballForward: 0.893, ballLateral: 0.1,
+    ballHeight: 0.021, ballForward: 1.004, ballLateral: 0.1,
     type: 'wood', head: { length: 0.095, height: 0.042, depth: 0.060 } },
   { id: 'driver', label: 'Driver', lengthIn: 45.5, lieDeg: 56, spineTiltDeg: 25,
-    ballHeight: 0.055, ballForward: 0.983, ballLateral: 0.16,
+    ballHeight: 0.055, ballForward: 1.121, ballLateral: 0.16,
     type: 'wood', head: { length: 0.118, height: 0.062, depth: 0.086 } },
 ];
 
@@ -274,7 +283,7 @@ export const CLUB = {
    * convenient frame but an arbitrary zero, and this shifts it onto one that
    * means something. Re-solve it if the address wrist angles change.
    */
-  faceZeroDeg: -87.9,
+  faceZeroDeg: -89.1,
   /** How far the butt end sticks out beyond the hands -- the grip-down. */
   buttBeyondHands: 0.1,
   shaftRadius: 0.006,

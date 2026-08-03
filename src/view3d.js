@@ -368,14 +368,18 @@ export class SceneView {
       new THREE.BoxGeometry(length, height, depth),
       new THREE.MeshStandardMaterial({ color: '#c8d2de', roughness: 0.35, metalness: 0.6 }),
     );
-    // Local frame is (leadingEdge, headUp, faceNormal), so the head hangs off the
-    // shaft toward the toe and its face sits on the +z side.
-    body.position.set(length * 0.32, -height * 0.3, 0);
+    // Local frame is (leadingEdge, headUp, faceNormal). `headUp` works out to
+    // -shaftDir, so a POSITIVE y offset sits the head back toward the grip -- the
+    // shaft meets the head at its crown, near the heel, exactly as a hosel does.
+    // Negative pushed the body out past the end of the shaft instead, which read
+    // as the head hanging off the wrong side and, at address, buried it below the
+    // ball rather than behind it.
+    body.position.set(length * 0.32, height * 0.35, 0);
     const face = new THREE.Mesh(
       new THREE.BoxGeometry(length * 0.92, height * 0.86, 0.004),
       new THREE.MeshStandardMaterial({ color: COLORS.face, roughness: 0.5 }),
     );
-    face.position.set(length * 0.32, -height * 0.3, depth / 2 + 0.002);
+    face.position.set(length * 0.32, height * 0.35, depth / 2 + 0.002);
     this.headGroup.add(body, face);
   }
 
