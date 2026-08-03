@@ -10,7 +10,7 @@
 import { TIMING, REACH, CLUBS, clubReach } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
 import { setHandedness, setClub, getClub, setPlaneOffset, getRig, ballPosition } from './rig.js';
-import { setClubLength, faceAngleToTarget } from './club.js';
+import { setClubLength, setClubLie } from './club.js';
 import { distance } from './vec3.js';
 import { Store } from './state.js';
 import { PlaneView } from './view2d.js';
@@ -48,7 +48,9 @@ const syncToAddress = () => {
   setPlaneOffset(swing.addressAxisDistance());
   // The club's length is its own spec, not something measured off the pose. The
   // ball was solved to sit where that club reaches, so the two agree at address.
+  // The lie goes with it: it is what angles the head on the end of the shaft.
   setClubLength(clubReach(getClub()));
+  setClubLie(getClub().lieDeg);
 };
 swing.onChange(syncToAddress);
 syncToAddress();

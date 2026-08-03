@@ -125,24 +125,23 @@ export const PLANE = {
  * so two keyframes close together inherit a tangent scaled to the distant ones.
  * The cubic between them then overshoots its own endpoints -- the bulge or loop
  * that shows up when points are bunched. Segments shorter than `straightBelow`
- * in the (u, v) plane are therefore joined with a straight line instead.
+ * in the (u, v) plane are joined with a straight line instead.
  *
- * The cutoff is set from measurement, not taste. Comparing each segment's arc
- * length against its own chord on the reference swing:
+ * It is OFF, and the measurements are why. The hand track is now interpolated
+ * with the Fritsch-Carlson limiter (see `tangent` in swing.js), which forbids the
+ * cubic from leaving the box its own endpoints define -- so there is no overshoot
+ * left for a straight segment to fix. With the limiter on, the worst segment on
+ * the reference swing runs at arc/chord 1.033; without it, P3 to P4 reaches 1.30.
+ * Turning this rule on as well only trades curves for polyline corners: at 0.15 m
+ * the sharpest corner in the path moves from the top of the backswing, where the
+ * hand really does reverse, to release, where it does not.
  *
- *     P7 to P7.5    0.074 m    arc/chord 1.135   <- a 13.5% detour, the distortion
- *     P7.5 to P8    0.137 m    arc/chord 1.004
- *     every other   >= 0.15 m  arc/chord <= 1.027
- *
- * so the curve only misbehaves below about 0.10 m, and 0.10 sits in the gap
- * between the bad segment and the next shortest good one. Straightening that one
- * segment takes its arc/chord to exactly 1.000.
- *
- * Set `straightBelow: Infinity` to make the entire path straight-line -- the
- * one-line change to a pure polyline.
+ * Raise it to force short segments straight anyway; `Infinity` makes the whole
+ * path a polyline, which is the one-line change to a pure keyframe-to-keyframe
+ * reading of the swing.
  */
 export const CURVE = {
-  straightBelow: 0.1,
+  straightBelow: 0,
 };
 
 /**
@@ -225,7 +224,7 @@ export const CLUBS = [
     type: 'wood', head: { length: 0.118, height: 0.062, depth: 0.086 } },
 ];
 
-export const DEFAULT_CLUB = 'midIron';
+export const DEFAULT_CLUB = 'driver';
 
 /** Hand-to-clubhead distance for a club: its length less the grip-down. */
 export const clubReach = (club) => club.lengthIn * 0.0254 - ADDRESS.gripDown;
@@ -283,7 +282,7 @@ export const CLUB = {
    * convenient frame but an arbitrary zero, and this shifts it onto one that
    * means something. Re-solve it if the address wrist angles change.
    */
-  faceZeroDeg: -89.1,
+  faceZeroDeg: -84.2,
   /** How far the butt end sticks out beyond the hands -- the grip-down. */
   buttBeyondHands: 0.1,
   shaftRadius: 0.006,

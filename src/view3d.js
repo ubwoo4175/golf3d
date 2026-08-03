@@ -14,9 +14,15 @@ import { BODY, PLANE, SCENE, CLUB, COLORS } from './config.js';
 
 /**
  * Where the hosel sits on the head, as fractions of the head's own dimensions:
- * in from the heel, up toward the crown, and how far the neck rises above it.
+ * how far toward the HEEL of the face centre, how far up to the crown, and how
+ * far the neck rises above the crown before the shaft takes over.
+ *
+ * The head is positioned at the middle of the face and extends from there toward
+ * the TOE -- away from the golfer -- so the shaft lands on the heel corner and
+ * the head sticks out past it. Getting this backwards is what had the head
+ * hanging on the near side of the shaft.
  */
-const HOSEL = { heel: 0.42, crown: 0.4, neck: 0.55 };
+const HOSEL = { heel: 0.42, crown: 0.5, neck: 0.55 };
 import { HIP_PIVOT, getRig, getClub, planeToWorld, ballPosition } from './rig.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
@@ -370,12 +376,12 @@ export class SceneView {
       child.material?.dispose();
     }
     const { length, height, depth } = getClub().head;
-    // Local frame is (leadingEdge, headUp, faceNormal), and the group sits at
-    // `club.head` -- the middle of the face, which is where the ball is struck.
-    // So the BODY is centred on the origin and the shaft stops short of it at the
-    // hosel; see `hoselPoint`. Offsetting the body instead, with the shaft still
-    // running to the group origin, ran the shaft straight through the middle of
-    // the head, which is what made it look skewered on.
+    // Local frame is (toe, crown, faceNormal), and the group sits at `club.head`
+    // -- the middle of the face, which is where the ball is struck. So the BODY
+    // is centred on the origin and the shaft stops short of it at the hosel, out
+    // on the heel side; see `hoselPoint`. The frame is built at the club's LIE
+    // angle, so +x really does run along the sole toward the toe rather than
+    // square across the shaft.
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(length, height, depth),
       new THREE.MeshStandardMaterial({ color: '#c8d2de', roughness: 0.35, metalness: 0.6 }),
@@ -384,7 +390,14 @@ export class SceneView {
       new THREE.BoxGeometry(length * 0.92, height * 0.86, 0.004),
       new THREE.MeshStandardMaterial({ color: COLORS.face, roughness: 0.5 }),
     );
-    face.position.set(0, 0, depth / 2 + 0.002);
+    // Which side of the box the face is on depends on handedness, because a
+    // left-handed club is the MIRROR IMAGE of a right-handed one, not a rotation
+    // of it. The group's third axis is `cross(toe, crown)`, which is a proper
+    // rotation for both -- feeding `setRotationFromMatrix` a reflection instead
+    // gets a nonsense quaternion out -- and that axis lands on the far side of
+    // the face for a righty and the near side for a lefty. So the slab moves
+    // rather than the basis. `rebuildRig` re-runs this on every flip.
+    face.position.set(0, 0, -getRig().H * (depth / 2 + 0.002));
     // The hosel: a short neck from the heel-and-crown corner up to where the
     // shaft ends, so the join reads as a join rather than a puncture.
     const h = HOSEL;
@@ -401,9 +414,8 @@ export class SceneView {
   /** Where the shaft ends: the top of the hosel, in world space. */
   hoselPoint(club) {
     const { length, height } = getClub().head;
-    const headUp = V.normalize(V.cross(club.faceNormal, club.leadingEdge));
-    let p = V.addScaled(club.head, club.leadingEdge, -length * HOSEL.heel);
-    return V.addScaled(p, headUp, height * (HOSEL.crown + HOSEL.neck));
+    const p = V.addScaled(club.head, club.toe, -length * HOSEL.heel);
+    return V.addScaled(p, club.crown, height * (HOSEL.crown + HOSEL.neck));
   }
 
   buildPaths() {
@@ -480,14 +492,17 @@ export class SceneView {
     );
     tri.needsUpdate = true;
 
-    // The club. The head group's basis is (leadingEdge, headUp, faceNormal), so
-    // the box only has to be positioned once in `buildHead` and re-oriented here.
+    // The club. The head group's basis is (toe, crown, faceNormal), so the box
+    // only has to be positioned once in `buildHead` and re-oriented here.
     const club = pose.club;
     this.shaft.aim(club.butt, this.hoselPoint(club));
     this.headGroup.position.copy(v3(club.head));
-    const headUp = V.normalize(V.cross(club.faceNormal, club.leadingEdge));
     this.headGroup.setRotationFromMatrix(
-      new THREE.Matrix4().makeBasis(v3(club.leadingEdge), v3(headUp), v3(club.faceNormal)),
+      new THREE.Matrix4().makeBasis(
+        v3(club.toe),
+        v3(club.crown),
+        v3(V.normalize(V.cross(club.toe, club.crown))),
+      ),
     );
     this.shaft.mesh.visible = showClub;
     this.headGroup.visible = showClub;

@@ -1,31 +1,43 @@
 /**
- * Wrist view: the club's direction, seen from the wrist, in 3D.
+ * Club view: which way the club points, in the TORSO frame.
  *
- * The hand is pinned at the origin and never moves -- this view says nothing
- * about WHERE the hands are, only about what the club is doing relative to them.
- * The scene is drawn in the HAND FRAME, so the lead forearm always points the
- * same way on screen and the only thing that moves is the club. That is what
- * isolates the wrist from the rest of the swing.
+ * The hand is pinned at the centre and never moves -- this view says nothing
+ * about WHERE the hands are, only about what the club is doing. What it is
+ * measured against is the torso: the shoulder line and the spine axis, the same
+ * frame the hand rectangle lives in, so this pane and the one above it are two
+ * halves of one picture of the body.
  *
- *   +Y   the lead forearm extended. The club lies along it at zero hinge.
- *   +X   the cock axis  -- hinging in the plane of the two forearms
- *   +Z   the bow axis   -- hinging out of that plane
+ * It used to be measured against the LEAD FOREARM instead. That is the frame the
+ * numbers are STORED in -- a wrist angle is a joint angle, and joints are
+ * relative to the bone above them -- but it is a poor frame to look at, because
+ * the forearm is itself swinging round. The club could be dead still in space and
+ * this pane would show it moving. Reading it meant holding two rotations in your
+ * head at once. The torso frame removes one of them: legs and spine are static in
+ * this model, so a shaft that holds still on the chart is a shaft that is close to
+ * holding still in the world.
  *
- * THE HEMISPHERE is a real one, radius = one shaft length, looked at STRAIGHT
- * DOWN the forearm axis through an orthographic camera. So it draws as a circle,
- * the clubhead sits on the surface, and the shaft runs from the hand at the
- * CENTRE of the sphere out to it -- drawn translucent, because seen from directly
- * above a leaning shaft is foreshortened and the lean is the thing worth seeing.
+ * THE CHART is a sphere of directions, looked at straight DOWN THE SPINE AXIS,
+ * from above the golfer's head.
  *
- * Contours are lines of equal HEIGHT, as on a topographic map, which is what
- * makes a circle read as a dome. They bunch toward the rim exactly as they should
- * on a sphere, and that bunching is the depth cue.
+ *   centre       the club hanging straight down the spine axis
+ *   radius       phi, the angle away from straight down, 0 at the centre and 180
+ *                at the rim -- so the whole sphere fits, and the club may point
+ *                anywhere at all. Radius is phi/180, evenly spaced, which is what
+ *                makes the map one-to-one: a true orthographic sphere would put
+ *                phi and 180-phi on the same ring and a drag could not tell them
+ *                apart.
+ *   bearing      which way round the body the club is pointing: toward the ball,
+ *                behind you, toward the lead side, toward the trail side.
  *
- * A true hemisphere only holds 90 degrees of hinge, and past 90 an orthographic
- * picture would fold back inside the rim -- two clubs on one pixel, and a drag
- * that cannot tell them apart. So the swing is authored to stay inside 90; see
- * the note on the finish in swing.js. Within that, screen radius is
- * `sin(hinge)` and the map is one-to-one.
+ * The surface is drawn at the sphere's own HEIGHT, `-cos(phi)`, so it reads as a
+ * bowl with a flared rim: the club hanging straight down is at the bottom of the
+ * bowl, horizontal is the 90 ring at the lip, and anything above horizontal is out
+ * on the brim. Contours are lines of equal height, as on a topographic map, which
+ * is what makes a flat circle read as a curved surface.
+ *
+ * The shaft is drawn translucent from the hand at the centre out to the surface.
+ * Seen from directly above it is foreshortened, and that foreshortening is the
+ * depth cue: a short stub means the club is pointing nearly straight up or down.
  *
  * A 2D overlay carries the text and the face dial. Roll about the shaft is the
  * third degree of freedom, and having no direction of its own it has nowhere to
@@ -36,22 +48,23 @@ import * as THREE from 'three';
 
 import { COLORS, CLUB } from './config.js';
 import { getRig, getClub } from './rig.js';
-import { hingeOf, shaftDirection } from './club.js';
+import { wristForDirection } from './club.js';
 import { phaseAt, RELEASE_T } from './swing.js';
 import { clamp } from './vec3.js';
 
 const GRAB_RADIUS_PX = 15;
-/** A hemisphere holds exactly this much hinge. */
-const MAX_DEG = 90;
+/** The chart holds the whole sphere: straight down to straight up. */
+const MAX_PHI = 180;
 const CHART_R = 1;
 /** Contour spacing, as a fraction of the sphere radius. Equal HEIGHT steps. */
 const CONTOUR_STEP = 0.1;
-/** Angles worth a number, placed at their true radii. */
-const LABELLED = [30, 60, 90];
+/** Rings worth a number, at their own radii. 90 is the horizon. */
+const LABELLED = [45, 90, 135];
 const DIAL_RADIUS = 30;
 const DIAL_INSET = 46;
 
 const v3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const rad = (deg) => (deg * Math.PI) / 180;
 
 export class WristView {
   constructor(canvas, overlay, store, swing) {
@@ -69,15 +82,14 @@ export class WristView {
     this.scene.background = new THREE.Color('#0c1220');
 
     // A fixed camera, deliberately: the pane's whole job is to be dragged on, and
-    // an orbit control would fight the drag for the same mouse button. The angle
-    // is high enough that the chart disk never becomes edge-on, which is what
-    // would make the ray-cast ill-conditioned.
-    // Fixed direction, distance fitted to the pane -- see `frame()`. This pane is
-    // tall and narrow, so a hard-coded distance that looks right on one shape
-    // clips the chart on another.
-    // Orthographic and straight down. Perspective would scale the contour rings
-    // by their height and pull the map off the even angular spacing it depends
-    // on; orthographic makes screen position exactly the stored pair.
+    // an orbit control would fight the drag for the same mouse button.
+    //
+    // Orthographic and straight down the spine axis. Perspective would scale the
+    // rings by their height and pull the map off the even radial spacing it
+    // depends on; orthographic makes screen position exactly the chart position.
+    //
+    // With the camera up at -Z, screen right is +X and screen UP is -Z. So the
+    // scene's +X is the trail side and its -Z is the ball -- see `chartPoint`.
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 20);
     this.camera.position.set(0, 6, 0);
     this.camera.up.set(0, 0, -1);
@@ -88,12 +100,78 @@ export class WristView {
     this.bind();
   }
 
+  // --- the chart -----------------------------------------------------------
+
+  /** Chart radius for a polar angle away from straight down. Evenly spaced. */
+  chartRadius(phiDeg) {
+    return (CHART_R * phiDeg) / MAX_PHI;
+  }
+
+  /** Height of the surface there: the sphere's own, which is what curves it. */
+  domeHeight(phiDeg) {
+    return -CHART_R * Math.cos(rad(phiDeg));
+  }
+
+  /**
+   * A direction in TORSO components to a point on the chart.
+   *
+   * @param s  along the shoulder line, + toward the lead side
+   * @param u  along the spine axis, + toward the head
+   * @param f  along the chest normal, + toward the ball
+   *
+   * Screen right is the TRAIL side and screen up is the ball, which is the same
+   * arrangement as the hand rectangle above: the golfer's own view of their own
+   * hands, mirrored with handedness so it holds for a lefty too.
+   */
+  chartPoint(s, u, f) {
+    const phi = (Math.acos(clamp(-u, -1, 1)) * 180) / Math.PI;
+    const r = this.chartRadius(phi);
+    const flat = Math.hypot(s, f);
+    const H = getRig().H;
+    if (flat < 1e-9) return v3(0, this.domeHeight(phi), 0);
+    return v3((-H * s * r) / flat, this.domeHeight(phi), (-f * r) / flat);
+  }
+
+  /** Inverse: a point's horizontal position back to a torso-frame direction. */
+  chartToDirection(p) {
+    const H = getRig().H;
+    const r = Math.min(Math.hypot(p.x, p.z), CHART_R);
+    const phi = rad((r / CHART_R) * MAX_PHI);
+    const u = -Math.cos(phi);
+    const flat = Math.hypot(p.x, p.z);
+    if (flat < 1e-9) return { s: 0, u, f: 0 };
+    const k = Math.sin(phi) / flat;
+    return { s: -H * p.x * k, u, f: -p.z * k };
+  }
+
+  /** The club's direction at a pose, in torso components. */
+  torsoDirection(pose) {
+    const d = pose.club.shaftDir;
+    const b = pose.basis;
+    return {
+      s: d.x * b.side.x + d.y * b.side.y + d.z * b.side.z,
+      u: d.x * b.up.x + d.y * b.up.y + d.z * b.up.z,
+      f: d.x * b.fwd.x + d.y * b.fwd.y + d.z * b.fwd.z,
+    };
+  }
+
+  /** Where a pose puts the clubhead on the chart. */
+  pointFor(pose) {
+    const { s, u, f } = this.torsoDirection(pose);
+    return this.chartPoint(s, u, f);
+  }
+
+  /** Polar angle away from straight down, in degrees -- the chart's radius. */
+  phiOf(pose) {
+    return (Math.acos(clamp(-this.torsoDirection(pose).u, -1, 1)) * 180) / Math.PI;
+  }
+
   // --- scene ---------------------------------------------------------------
 
   build() {
     // Lit from LOW and to one side, not from the camera. Overhead light on a
-    // top-down dome is nearly uniform, which is what made the surface read as a
-    // flat disk -- the whole job of the shading here is to say "this is raised".
+    // top-down surface is nearly uniform, which is what would make it read as a
+    // flat disk -- the whole job of the shading here is to say "this is curved".
     this.scene.add(new THREE.AmbientLight('#4a5f80', 0.55));
     const key = new THREE.DirectionalLight('#eaf2ff', 1.5);
     key.position.set(-2.2, 1.1, -1.6);
@@ -102,10 +180,39 @@ export class WristView {
     fill.position.set(2.0, 0.6, 1.8);
     this.scene.add(fill);
 
-    // A real hemisphere. Translucent and double-sided so the shaft inside it
-    // stays visible, with depthWrite off so it never occludes what it contains.
+    // The surface: the sphere of directions, radially re-parameterised so the far
+    // half does not fold back over the near one. Translucent and double-sided so
+    // the shaft inside it stays visible, with depthWrite off so it never occludes
+    // what it contains.
+    const rings = 96;
+    const segments = 96;
+    const positions = [];
+    const index = [];
+    for (let i = 0; i <= rings; i += 1) {
+      const phi = (i / rings) * MAX_PHI;
+      const r = this.chartRadius(phi);
+      const y = this.domeHeight(phi);
+      for (let j = 0; j <= segments; j += 1) {
+        const b = (j / segments) * Math.PI * 2;
+        positions.push(r * Math.cos(b), y, r * Math.sin(b));
+      }
+    }
+    for (let i = 0; i < rings; i += 1) {
+      for (let j = 0; j < segments; j += 1) {
+        const a = i * (segments + 1) + j;
+        const c = a + segments + 1;
+        index.push(a, c, a + 1, a + 1, c, c + 1);
+      }
+    }
+    const surfaceGeometry = new THREE.BufferGeometry();
+    surfaceGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    surfaceGeometry.setIndex(index);
+    surfaceGeometry.computeVertexNormals();
     const surface = new THREE.Mesh(
-      new THREE.SphereGeometry(CHART_R, 72, 36, 0, Math.PI * 2, 0, Math.PI / 2),
+      surfaceGeometry,
       new THREE.MeshStandardMaterial({
         color: '#2b4060',
         roughness: 0.7,
@@ -119,13 +226,15 @@ export class WristView {
     surface.renderOrder = 0;
     this.scene.add(surface);
 
-    // Contours of equal HEIGHT, like a topographic map. On a sphere they bunch
-    // toward the rim, and that bunching is what reads as curvature -- rings
-    // spaced by angle would be evenly spaced and read as a flat target.
+    // Contours of equal HEIGHT, like a topographic map. They bunch where the
+    // surface is steep and open out where it flattens, and that unevenness is
+    // what reads as curvature -- rings spaced by angle would be evenly spaced and
+    // read as a flat target.
     const contours = [];
-    for (let k = CONTOUR_STEP; k < 1; k += CONTOUR_STEP) {
-      const y = CHART_R * k;
-      const r = Math.sqrt(Math.max(0, CHART_R * CHART_R - y * y));
+    for (let k = -1 + CONTOUR_STEP; k < 1; k += CONTOUR_STEP) {
+      const phi = (Math.acos(clamp(-k, -1, 1)) * 180) / Math.PI;
+      const r = this.chartRadius(phi);
+      const y = this.domeHeight(phi);
       for (let i = 0; i < 160; i += 1) {
         const b0 = (i / 160) * Math.PI * 2;
         const b1 = ((i + 1) / 160) * Math.PI * 2;
@@ -137,44 +246,55 @@ export class WristView {
     }
     const contourLines = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(contours),
-      new THREE.LineBasicMaterial({ color: '#7d9cc4', transparent: true, opacity: 0.42 }),
+      new THREE.LineBasicMaterial({ color: '#7d9cc4', transparent: true, opacity: 0.36 }),
     );
     contourLines.renderOrder = 1;
     this.scene.add(contourLines);
 
-    // The rim, and meridians every 30 degrees of bearing.
-    const rim = [];
-    for (let i = 0; i <= 160; i += 1) {
-      const b = (i / 160) * Math.PI * 2;
-      rim.push(v3(CHART_R * Math.cos(b), 0, CHART_R * Math.sin(b)));
+    // The horizon -- the club exactly level -- and the rim, the club straight up.
+    // The horizon is the one ring worth picking out: inside it the club points
+    // below level, outside it above.
+    for (const [phi, color, opacity] of [
+      [90, '#9fb8d8', 0.85],
+      [MAX_PHI, '#5b779a', 0.5],
+    ]) {
+      const pts = [];
+      const r = this.chartRadius(phi);
+      const y = this.domeHeight(phi);
+      for (let i = 0; i <= 160; i += 1) {
+        const b = (i / 160) * Math.PI * 2;
+        pts.push(v3(r * Math.cos(b), y, r * Math.sin(b)));
+      }
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
+      );
+      line.renderOrder = 1;
+      this.scene.add(line);
     }
-    this.scene.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(rim),
-        new THREE.LineBasicMaterial({ color: '#9fb8d8', transparent: true, opacity: 0.8 }),
-      ),
-    );
+
+    // Meridians every 30 degrees of bearing.
     const meridians = [];
     for (let b = 0; b < 360; b += 30) {
-      const rad = (b * Math.PI) / 180;
-      for (let i = 0; i < 36; i += 1) {
-        const a0 = ((Math.PI / 2) * i) / 36;
-        const a1 = ((Math.PI / 2) * (i + 1)) / 36;
-        meridians.push(
-          v3(CHART_R * Math.sin(a0) * Math.cos(rad), CHART_R * Math.cos(a0), CHART_R * Math.sin(a0) * Math.sin(rad)),
-          v3(CHART_R * Math.sin(a1) * Math.cos(rad), CHART_R * Math.cos(a1), CHART_R * Math.sin(a1) * Math.sin(rad)),
-        );
+      const bearing = rad(b);
+      for (let i = 0; i < 48; i += 1) {
+        for (const phi of [(MAX_PHI * i) / 48, (MAX_PHI * (i + 1)) / 48]) {
+          const r = this.chartRadius(phi);
+          meridians.push(
+            v3(r * Math.cos(bearing), this.domeHeight(phi), r * Math.sin(bearing)),
+          );
+        }
       }
     }
     const meridianLines = new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(meridians),
-      new THREE.LineBasicMaterial({ color: '#5b779a', transparent: true, opacity: 0.3 }),
+      new THREE.LineBasicMaterial({ color: '#5b779a', transparent: true, opacity: 0.26 }),
     );
     meridianLines.renderOrder = 1;
     this.scene.add(meridianLines);
 
-    // The hand is the CENTRE of the sphere, which is also the centre of the
-    // circle on screen. The forearm runs straight away from the camera in this
+    // The hand is the centre of the sphere, which is also the centre of the
+    // circle on screen. The spine axis runs straight away from the camera in this
     // view, so there is nothing to draw for it.
     const hand = new THREE.Mesh(
       new THREE.SphereGeometry(0.05, 20, 16),
@@ -183,10 +303,8 @@ export class WristView {
     this.scene.add(hand);
 
     // The club: shaft, head body and face, in a group whose basis is set from the
-    // shaft direction and the roll each frame.
-    // Translucent, and drawn after the dome so it reads through it: from
-    // straight above a leaning shaft is foreshortened, and its lean is what says
-    // how far round the sphere the club has gone.
+    // shaft direction and the roll each frame. Translucent, and drawn after the
+    // surface so it reads through it.
     this.shaft = this.cylinder(0.026, COLORS.shaft, v3(0, 0, 0), v3(0, 1, 0));
     this.shaft.material.transparent = true;
     this.shaft.material.opacity = 0.62;
@@ -240,42 +358,6 @@ export class WristView {
     return mesh;
   }
 
-  /** Screen radius for a hinge angle: the sphere's own, so this is a real dome. */
-  chartRadius(hingeDeg) {
-    return CHART_R * Math.sin((hingeDeg * Math.PI) / 180);
-  }
-
-  /** Height of the surface at a hinge angle. */
-  domeHeight(hingeDeg) {
-    return CHART_R * Math.cos((hingeDeg * Math.PI) / 180);
-  }
-
-  /**
-   * Where a (cock, bow) pair puts the clubhead on the dome. The horizontal axis
-   * is mirrored with handedness, the same as the hand panel, so a cock toward the
-   * trail side falls on the same side of the screen in both.
-   */
-  chartPoint(cockDeg, bowDeg) {
-    const hinge = Math.hypot(cockDeg, bowDeg);
-    const k = hinge > 1e-9 ? this.chartRadius(hinge) / hinge : 0;
-    const H = getRig().H;
-    return v3(-H * cockDeg * k, this.domeHeight(hinge), -bowDeg * k);
-  }
-
-  /** Inverse of `chartPoint`, from a point's horizontal position alone. */
-  chartToWrist(p) {
-    const r = Math.hypot(p.x, p.z);
-    if (r < 1e-9) return { cockDeg: 0, bowDeg: 0 };
-    const hinge = (Math.asin(clamp(r / CHART_R, 0, 1)) * 180) / Math.PI;
-    const H = getRig().H;
-    return { cockDeg: (-H * p.x * hinge) / r, bowDeg: (-p.z * hinge) / r };
-  }
-
-  /** Alias kept for the frame fit and the track. */
-  tipFor(cockDeg, bowDeg) {
-    return this.chartPoint(cockDeg, bowDeg);
-  }
-
   // --- interaction ---------------------------------------------------------
 
   resize() {
@@ -292,12 +374,6 @@ export class WristView {
     this.layout();
   }
 
-  /**
-   * Pull the camera back far enough that the chart and a fully hinged club fit
-   * BOTH ways. The horizontal half-angle is the binding one here: the pane is
-   * about half as wide as it is tall, so fitting only the height leaves the chart
-   * running off the sides.
-   */
   /**
    * Fit the circle to the pane. Orthographic, so this is just the half-extents;
    * the shorter side binds and the longer one gets the slack.
@@ -324,13 +400,16 @@ export class WristView {
   layout() {
     this.dial = { x: DIAL_INSET, y: this.h - DIAL_INSET };
     this.buildHead();
+    // Chart positions depend on handedness through the mirror, so a flip has to
+    // invalidate the cached track.
+    this.trackStamp = null;
   }
 
   activeIndex() {
     return this.swing.nearestKeyframeIndex(this.store.state.t);
   }
 
-  /** Project a view-space point to overlay pixels. */
+  /** Project a scene point to overlay pixels. */
   toScreen(p) {
     const v = p.clone().project(this.camera);
     return { x: ((v.x + 1) / 2) * this.w, y: ((1 - v.y) / 2) * this.h };
@@ -355,7 +434,7 @@ export class WristView {
     let best = null;
     let bestDist = GRAB_RADIUS_PX;
     this.swing.keys.forEach((k, i) => {
-      const p = this.toScreen(this.chartPoint(k.cockDeg, k.bowDeg));
+      const p = this.toScreen(this.pointFor(this.swing.poseAt(k.t)));
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= bestDist) {
         bestDist = d;
@@ -382,7 +461,7 @@ export class WristView {
         this.mode = 'face';
         this.index = this.activeIndex();
       } else {
-        this.mode = 'hinge';
+        this.mode = 'aim';
         this.index = this.pickKeyframe(x, y) ?? this.activeIndex();
       }
       this.store.set({ t: this.swing.keys[this.index].t, playing: false });
@@ -418,33 +497,39 @@ export class WristView {
     });
   }
 
+  /**
+   * Turn a drag into a stored wrist pair.
+   *
+   * The chart is in the torso frame and the storage is in the hand frame, so this
+   * goes the long way round: chart point -> torso components -> world direction ->
+   * `wristForDirection`. The hand frame is built from the hand and the two elbows,
+   * none of which the wrist touches, so it is fixed for the whole of a drag.
+   */
   applyDrag(x, y) {
     if (this.mode === 'face') {
       const deg = (Math.atan2(this.dial.y - y, x - this.dial.x) * 180) / Math.PI;
       this.swing.setKeyframeWrist(this.index, { faceDeg: Math.round(90 - deg) });
       return;
     }
-    const hit = this.rayToChart(x, y);
-    if (!hit) return;
-    const { cockDeg, bowDeg } = this.chartToWrist(hit);
-    // Clamp to the chart, in polar rather than per-axis: the chart is a disk, and
-    // clamping the components separately would let a drag past the rim slide
-    // round it instead of stopping.
-    const hinge = Math.hypot(cockDeg, bowDeg);
-    const k = hinge > MAX_DEG ? MAX_DEG / hinge : 1;
-    this.swing.setKeyframeWrist(this.index, {
-      cockDeg: clamp(cockDeg * k, -MAX_DEG, MAX_DEG),
-      bowDeg: clamp(bowDeg * k, -MAX_DEG, MAX_DEG),
-    });
+    const { s, u, f } = this.chartToDirection(this.rayToChart(x, y));
+    const pose = this.swing.poseAt(this.swing.keys[this.index].t);
+    const b = pose.basis;
+    const dir = {
+      x: s * b.side.x + u * b.up.x + f * b.fwd.x,
+      y: s * b.side.y + u * b.up.y + f * b.fwd.y,
+      z: s * b.side.z + u * b.up.z + f * b.fwd.z,
+    };
+    const { cockDeg, bowDeg } = wristForDirection(pose.handFrame, dir);
+    this.swing.setKeyframeWrist(this.index, { cockDeg, bowDeg });
   }
 
   // --- drawing -------------------------------------------------------------
 
   draw(pose) {
-    const { cockDeg, bowDeg, faceDeg } = pose.wrist;
+    const { faceDeg } = pose.wrist;
 
     const hand = v3(0, 0, 0);
-    const tip = this.chartPoint(cockDeg, bowDeg);
+    const tip = this.pointFor(pose);
     const along = tip.clone().sub(hand);
     const len = Math.max(along.length(), 1e-4);
     const dir = along.clone().divideScalar(len);
@@ -455,12 +540,12 @@ export class WristView {
 
     // Head orientation: the roll is a rotation about the shaft, so the head frame
     // is the shaft direction plus a reference perpendicular rolled by faceDeg.
-    // Reusing the pose's own leading edge would be wrong here -- that is in world
+    // Reusing the pose's own head axes would be wrong here -- those are in world
     // space and this scene is the chart -- so it is rebuilt locally.
     let ref = new THREE.Vector3(0, 1, 0).cross(dir);
     if (ref.lengthSq() < 1e-8) ref = new THREE.Vector3(1, 0, 0);
     ref.normalize();
-    const roll = ((CLUB.faceZeroDeg + faceDeg) * Math.PI) / 180;
+    const roll = rad(CLUB.faceZeroDeg + faceDeg);
     const faceNormal = ref.clone().applyAxisAngle(dir, roll).normalize();
     const leading = new THREE.Vector3().crossVectors(faceNormal, dir).normalize();
     const headUp = new THREE.Vector3().crossVectors(faceNormal, leading).normalize();
@@ -474,7 +559,7 @@ export class WristView {
     this.drawOverlay(pose);
   }
 
-  /** The wrist track and the keyframe markers, rebuilt when the swing changes. */
+  /** The club's track and the keyframe markers, rebuilt when the swing changes. */
   refreshTrack() {
     if (this.trackStamp === this.swing.revision && this.markers.children.length) return;
     this.trackStamp = this.swing.revision;
@@ -492,8 +577,7 @@ export class WristView {
     let prev = null;
     for (let i = 0; i <= n; i += 1) {
       const t = i / n;
-      const w = this.swing.sample(t).wrist;
-      const p = this.chartPoint(w.cockDeg, w.bowDeg);
+      const p = this.pointFor(this.swing.poseAt(t));
       const id = phaseAt(t).id;
       if (prev) (byPhase[id] ??= []).push(prev.clone(), p.clone());
       prev = p;
@@ -511,7 +595,7 @@ export class WristView {
         new THREE.SphereGeometry(Math.abs(k.t - RELEASE_T) < 1e-6 ? 0.032 : 0.024, 14, 10),
         new THREE.MeshStandardMaterial({ color: COLORS[phaseAt(k.t).id], roughness: 0.4 }),
       );
-      m.position.copy(this.chartPoint(k.cockDeg, k.bowDeg));
+      m.position.copy(this.pointFor(this.swing.poseAt(k.t)));
       this.markers.add(m);
     });
   }
@@ -528,35 +612,53 @@ export class WristView {
       const pad = 6;
       const w = ctx.measureText(text).width;
       const minX = opts.align === 'left' ? pad : opts.align === 'right' ? w + pad : w / 2 + pad;
-      const maxX = this.w - (opts.align === 'left' ? w + pad : opts.align === 'right' ? pad : w / 2 + pad);
+      const maxX =
+        this.w - (opts.align === 'left' ? w + pad : opts.align === 'right' ? pad : w / 2 + pad);
       ctx.fillText(text, clamp(x, minX, Math.max(minX, maxX)), clamp(y, 26, this.h - pad));
     };
 
-    // A few hinge angles numbered at their true radii, on the lower-left
-    // diagonal. The contours themselves are heights, not angles, so without
-    // these there would be no scale to read.
-    // Staggered in bearing as well as radius: on a sphere 60 and 90 degrees sit
-    // at radii 0.87 and 1.00, so on a single bearing their numbers collide.
+    // A few rings numbered at their own radii, on the lower-left diagonal. The
+    // contours themselves are heights, not angles, so without these there would
+    // be no scale to read.
     LABELLED.forEach((deg, i) => {
-      const bearing = (-136 + i * 13) * (Math.PI / 180);
-      const p = this.toScreen(this.chartPoint(deg * Math.cos(bearing), deg * Math.sin(bearing)));
+      const bearing = rad(-134 + i * 10);
+      const r = this.chartRadius(deg);
+      const p = this.toScreen(
+        v3(r * Math.cos(bearing), this.domeHeight(deg), r * Math.sin(bearing)),
+      );
       label(`${deg}°`, p.x, p.y + 4, { color: 'rgba(255,255,255,0.45)' });
     });
 
     const active = this.activeIndex();
     const k = this.swing.keys[active];
     if (k) {
-      const p = this.toScreen(this.chartPoint(k.cockDeg, k.bowDeg));
+      const p = this.toScreen(this.pointFor(this.swing.poseAt(k.t)));
       label(k.label, p.x + 12, p.y - 16, { align: 'left', color: '#ffffff' });
     }
 
+    // The four bearings, on the rim. This is the whole point of the torso frame:
+    // the chart's compass is the body, not the forearm.
     const sides = getRig().sides;
-    label(`← cock (${sides.trail} side)     cock (${sides.lead} side) →`, this.w / 2, this.h - 10);
+    // Each label is placed by asking the chart itself where that direction goes,
+    // pushed just outside the rim. Height does not matter -- the camera is
+    // orthographic and straight down, so only x and z reach the screen.
+    const compass = [
+      ['toward the ball', 0, 0, 1],
+      ['behind you', 0, 0, -1],
+      [`lead (${sides.lead})`, 1, 0, 0],
+      [`trail (${sides.trail})`, -1, 0, 0],
+    ];
+    for (const [text, s, u, f] of compass) {
+      const c = this.chartPoint(s, u, f);
+      const p = this.toScreen(v3(c.x * 2.14, 0, c.z * 2.14));
+      label(text, p.x, p.y, { color: 'rgba(255,255,255,0.4)' });
+    }
+
     label(
-      `hinge ${hingeOf(pose.wrist.cockDeg, pose.wrist.bowDeg).toFixed(0)}°   ` +
-        `cock ${pose.wrist.cockDeg.toFixed(0)}   bow ${pose.wrist.bowDeg.toFixed(0)}`,
+      `${this.phiOf(pose).toFixed(0)}° from straight down` +
+        `   ·   face ${pose.wrist.faceDeg >= 0 ? '+' : ''}${pose.wrist.faceDeg.toFixed(0)}°`,
       this.w - 12,
-      this.h - 28,
+      this.h - 12,
       { align: 'right', color: 'rgba(255,255,255,0.7)' },
     );
     const origin = this.toScreen(v3(0, 0, 0));
@@ -579,7 +681,7 @@ export class WristView {
     ctx.lineWidth = lit ? 2 : 1;
     ctx.stroke();
 
-    const a = (90 - roll) * (Math.PI / 180);
+    const a = rad(90 - roll);
     ctx.strokeStyle = COLORS.face;
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';

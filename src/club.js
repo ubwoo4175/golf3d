@@ -30,7 +30,7 @@
  */
 
 import * as V from './vec3.js';
-import { CLUB } from './config.js';
+import { CLUB, CLUBS, DEFAULT_CLUB } from './config.js';
 
 /** A neutral wrist: shaft in line with the arm, face unrolled. */
 export const WRIST_ZERO = { cockDeg: 0, bowDeg: 0, faceDeg: 0 };
@@ -54,6 +54,24 @@ export const setClubLength = (metres) => {
 };
 
 export const getClubLength = () => clubLength;
+
+/**
+ * The lie angle, which is what fixes the HEAD on the end of the shaft.
+ *
+ * The head is not square to the shaft -- if it were, the club would be a hammer,
+ * which is exactly what it looked like. The sole runs at the lie angle to the
+ * shaft, measured on the HEEL side, so the toe-to-heel axis sits `180 - lie`
+ * degrees round from the shaft's own direction. Kept here rather than read from
+ * `rig.js` so this module stays free of the rig; `main.js` pins it alongside the
+ * length whenever the club changes.
+ */
+let clubLie = (CLUBS.find((c) => c.id === DEFAULT_CLUB) ?? CLUBS[0]).lieDeg;
+
+export const setClubLie = (deg) => {
+  clubLie = deg;
+};
+
+export const getClubLie = () => clubLie;
 
 /** Total hinge away from the forearm axis, degrees. */
 export const hingeOf = (cockDeg, bowDeg) => Math.hypot(cockDeg, bowDeg);
@@ -121,16 +139,42 @@ function transport(frame, dir, vector) {
  */
 export function solveClub(frame, wrist = WRIST_ZERO, length = clubLength) {
   const { cockDeg = 0, bowDeg = 0, faceDeg = 0 } = wrist ?? {};
+  const H = frame.H ?? 1;
   const shaftDir = shaftDirection(frame, cockDeg, bowDeg);
 
   // Face reference: the forearm-plane normal, carried along with the shaft, then
   // rolled by the face angle about the shaft itself.
+  //
+  // The roll is signed by handedness. A left-hander is the mirror image of a
+  // right-hander, and a mirror reverses the sense of a rotation -- so the same
+  // stored `faceDeg` has to turn the face the other way round the shaft, or the
+  // lefty addresses the ball with the BACK of the club. It read 174 degrees off
+  // square before this.
   const faceRef = transport(frame, shaftDir, frame.n);
   const faceNormal = V.normalize(
-    V.rotateAbout(faceRef, shaftDir, V.rad(CLUB.faceZeroDeg + faceDeg)),
+    V.rotateAbout(faceRef, shaftDir, V.rad(H * (CLUB.faceZeroDeg + faceDeg))),
   );
-  // The leading edge: perpendicular to both, so it lies across the face.
-  const leadingEdge = V.normalize(V.cross(faceNormal, shaftDir));
+
+  // The head's own axes. Both lie in the FACE PLANE -- the plane the shaft leans
+  // in when the club is soled -- which is why they are built off `faceNormal`.
+  //
+  //   across  perpendicular to the shaft within that plane, pointing to the toe
+  //           side. `cross(shaftDir, faceNormal)` and not the other order: that
+  //           is the sign that points AWAY from the golfer at address, which is
+  //           where the head has to stick out. Signed by handedness, since a
+  //           cross product comes back negated under the mirror.
+  //   toe     the sole line, at the lie angle to the shaft. The lie is measured
+  //           on the heel side, so the toe is `180 - lie` round from `shaftDir`:
+  //               toe = shaft cos(lie) + across sin(lie)
+  //           Square to the shaft -- the old behaviour -- is the lie = 90 case,
+  //           and it is what made the head read as a hammerhead.
+  //   crown   sole to crown, completing the frame.
+  const across = V.scale(V.normalize(V.cross(shaftDir, faceNormal)), H);
+  const lie = V.rad(clubLie);
+  const toe = V.normalize(
+    V.addScaled(V.scale(shaftDir, Math.cos(lie)), across, Math.sin(lie)),
+  );
+  const crown = V.scale(V.normalize(V.cross(toe, faceNormal)), H);
 
   return {
     cockDeg,
@@ -141,9 +185,12 @@ export function solveClub(frame, wrist = WRIST_ZERO, length = clubLength) {
     shaftDir,
     /** Butt end, a short way back up the shaft from the hands. */
     butt: V.addScaled(frame.origin, shaftDir, -CLUB.buttBeyondHands),
+    /** Middle of the face: the point that meets the ball, and the head's trace. */
     head: V.addScaled(frame.origin, shaftDir, length),
     faceNormal,
-    leadingEdge,
+    toe,
+    crown,
+    lieDeg: clubLie,
   };
 }
 

@@ -42,17 +42,27 @@ import { solveClub, WRIST_ZERO } from './club.js';
  * forearms become parallel, which cannot happen with the elbows at two shoulders
  * a shoulder-width apart. The fallback is there for dragged poses anyway.
  *
- * `n` carries the handedness sign so that a given hinge/azimuth pair means the
- * same wrist action for a lefty as for a righty, rather than its mirror image.
+ * BOTH `n` and `r` carry the handedness sign, and both have to. Handedness is a
+ * mirror in Z, and a cross product does not survive a mirror unchanged: reflect
+ * both arguments and the result comes back NEGATED. `n` is one cross product deep
+ * and `r` is two, so without the sign on each the lefty's frame is a reflection of
+ * the righty's in `n` but the ANTI-reflection in `r` -- and the same stored
+ * (cock, bow) then hinges the club the wrong way round the forearm. With the sign
+ * on both, the frame mirrors cleanly and one stored swing serves both golfers.
+ *
+ * `H` rides along on the frame because the club needs it too: the shaft direction
+ * mirrors, but the ROLL about it has to reverse, and a mirrored golfer holds a
+ * mirrored club.
  */
 export function handFrame(hand, leadElbow, trailElbow, basis) {
+  const H = getRig().H;
   const f = V.normalize(V.sub(hand, leadElbow));
   const w = V.normalize(V.sub(hand, trailElbow));
   let n = V.cross(f, w);
   if (V.length(n) < 1e-6) n = V.cross(f, basis.up);
   if (V.length(n) < 1e-6) n = V.cross(f, basis.side);
-  n = V.scale(V.normalize(n), getRig().H);
-  return { origin: hand, f, r: V.normalize(V.cross(n, f)), n };
+  n = V.scale(V.normalize(n), H);
+  return { origin: hand, f, r: V.scale(V.normalize(V.cross(n, f)), H), n, H };
 }
 
 /**

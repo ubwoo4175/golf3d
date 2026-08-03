@@ -18,20 +18,26 @@
  * Impact is NOT where the trail arm straightens -- it is still extending through
  * impact and only reaches full length at release.
  *
- * THE CLUB. Every shaft direction the P-system names is ON PLANE -- no sideways
- * component -- because the published checkpoints all read "shaft parallel to the
- * target line". Authoring them with a sideways lean of 0.15 to 0.41 was what had
- * the club wandering across itself at the top.
+ * THE CLUB. Every shaft direction the P-system names as parallel to the target line
+ * is authored ON PLANE, with no sideways component. Authoring those with a
+ * sideways lean of 0.15 to 0.41 was what had the club wandering across itself at
+ * the top.
  *
- * THE PATH SHAPE
+ * THE PATH SHAPE is a narrow V in the torso frame, which is what a hand path
+ * really looks like once the body's own rotation is taken out of it:
+ *
  *   takeaway         a straight vertical line: u holds at 0 while v rises
- *   backswing        convex upward: bows ABOVE the chord from the takeaway to the top
- *   downswing        convex downward, and so drops below the backswing -- the
- *                    shallowing loop
- *   follow-through   slightly convex upward
+ *   backswing        up and across to the trail side, reaching its extreme in
+ *                    BOTH u and v at the top, where the hand turns
+ *   downswing        back down inside the backswing, and much straighter: from
+ *                    delivery to release it is very nearly a line
+ *   follow-through   out to the lead side and up, the mirror of the backswing but
+ *                    shallower, finishing level with the lead shoulder
  *
- * Those four together are what make the WORLD path flow: see the interpolation
- * notes in the README for the measurements.
+ * The reference numbers come from a hand-tuned pass over this app's own 2D panel
+ * rather than from a solver, and the wrist track is then SOLVED against them --
+ * every shaft direction below is a checkpoint aimed in world space and converted,
+ * not a hand-picked pair of angles. See the club section of the README.
  */
 
 import { rad, sub } from './vec3.js';
@@ -103,37 +109,52 @@ export function releaseBlendAt(t) {
  */
 export const REFERENCE_KEYFRAMES = [
   // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
-  // both arms stay equally straight through it: a one-piece takeaway. The
-  // segment is 8 cm, under `CURVE.straightBelow`, so it is drawn straight too.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 11.4, bowDeg: 21.1, faceDeg: 0.0, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -39.7, bowDeg: 6.6, faceDeg: -5.5, label: 'P1.5 takeaway' },
-  // Backswing -- convex upward.
-  { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.8, bowDeg: 28.2, faceDeg: -7.1, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -0.9, bowDeg: 73.0, faceDeg: -8.8, label: 'P3 lead arm parallel' },
-  // The club at the top is SHORT OF PARALLEL and ON PLANE: 44 degrees above
-  // horizontal, pointing away from the target, with no sideways component. It is
-  // not vertical, and that is the correction -- an earlier version solved the top
-  // to keep the clubhead rising, which stood the club on end and left it pointing
-  // at the sky. The head still peaks here anyway, because the hands are rising
-  // faster than the club is laying back.
-  { t: 0.6075, thetaDeg: 90, u: -0.2267, v: -0.0144, cockDeg: 27.9, bowDeg: 22.6, faceDeg: -15.1, label: 'P4 top, shoulders 90° away' },
-  // Downswing -- convex downward. Note P5 sits FURTHER back than P4: the hands
-  // keep drifting away from the target while the torso has already started down.
-  // That is the transition float, and it is what opens the loop at the top --
-  // P4 is no longer a simultaneous extremum of u and v, so the hand never stops.
-  { t: 0.7317, thetaDeg: 45, u: -0.2746, v: -0.2009, cockDeg: 2.7, bowDeg: 73.2, faceDeg: -18.2, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.7767, thetaDeg: 0, u: -0.22, v: -0.3176, cockDeg: -39.1, bowDeg: 39.5, faceDeg: -19.3, label: 'P6 delivery, shaft parallel, square' },
-  { t: 0.81, thetaDeg: -35, u: -0.1253, v: -0.3674, cockDeg: -13.3, bowDeg: 3.8, faceDeg: -20.1, label: 'P7 impact' },
+  // both arms stay equally straight through it: a one-piece takeaway. The line is
+  // exact and needs no special case: u is flat on both sides of P1.5, so the
+  // overshoot limiter takes the tangent there to zero and the cubic for u is
+  // identically zero across the whole segment.
+  //
+  // The club is not aimed at an ELEVATION here but at a point on the ground, 65 cm
+  // back down the target line. Aiming an elevation drove the head 5 cm under the
+  // turf halfway to P1.5: address and takeaway are 125 degrees apart in bearing
+  // around the forearm, and the short way round dips the hinge in between.
+  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 19.9, bowDeg: 24.5, faceDeg: 0.0, label: 'P1 address' },
+  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3651, cockDeg: 15.6, bowDeg: 17.8, faceDeg: -3.4, label: 'P1.5 takeaway' },
+  // Backswing -- up and across, with the club setting from parallel to the ground
+  // at P2 to 58 degrees above it at P3.
+  { t: 0.2868, thetaDeg: 40, u: -0.0658, v: -0.23, cockDeg: -21.7, bowDeg: 28.4, faceDeg: -4.5, label: 'P2 shaft parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.1273, v: -0.1393, cockDeg: 6.2, bowDeg: 71.3, faceDeg: -5.5, label: 'P3 lead arm parallel' },
+  // The top. The hands reach their extreme in BOTH u and v here -- the point of
+  // the V in the 2D panel. u lands on it exactly, because u is overshoot-limited;
+  // v floats 2.1 cm past and comes back, which is the transition float and is what
+  // keeps the hand from stopping dead as it turns.
+  //
+  // The club is SHORT OF PARALLEL and ON PLANE: 45 degrees above horizontal,
+  // pointing away from the target, with no sideways component. Not vertical -- an
+  // earlier version solved the top to keep the clubhead rising, which stood the
+  // club on end and left it pointing at the sky.
+  //
+  // The clubhead's own high point is at t = 0.47, before the top rather than at
+  // it, because the shaft is already flattening (58 degrees at P3, 45 here, 25 at
+  // P5) faster than the hands are still rising. That is the shallowing move, and
+  // it is what keeps the head's trace a single arc instead of the loop it used to
+  // draw here.
+  { t: 0.6075, thetaDeg: 90, u: -0.2025, v: -0.0285, cockDeg: 34.1, bowDeg: 27.4, faceDeg: -9.4, label: 'P4 top, shoulders 90° away' },
+  // Downswing -- inside the backswing, and much straighter than it: P5, P6, P7 and
+  // release are very nearly collinear in the (u, v) plane.
+  { t: 0.7317, thetaDeg: 45, u: -0.1665, v: -0.1875, cockDeg: -0.9, bowDeg: 47.4, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.7767, thetaDeg: 0, u: -0.0788, v: -0.3578, cockDeg: -61.8, bowDeg: 33.7, faceDeg: -12.1, label: 'P6 delivery, shaft parallel, square' },
+  { t: 0.81, thetaDeg: -35, u: -0.045, v: -0.3812, cockDeg: -16.6, bowDeg: 6.6, faceDeg: -12.6, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.3387, cockDeg: 12.2, bowDeg: -16.7, faceDeg: -20.6, label: 'P7.5 release, both arms straight' },
-  // Follow-through -- slightly convex UPWARD, unlike the downswing.
-  { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 27.5, bowDeg: 9.8, faceDeg: -21.1, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 17.8, bowDeg: 46.1, faceDeg: -21.7, label: 'P9 shoulders 90° to target' },
-  // The finish wants 168 degrees of hinge -- the club really does fold right back
-  // over the shoulder -- but the wrist chart is a hemisphere and holds 90, so it
-  // is capped at 82. That is the one place the model is knowingly short of the
-  // real thing.
-  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: -16.9, bowDeg: 80.2, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.4009, cockDeg: 18.7, bowDeg: -15.5, faceDeg: -12.9, label: 'P7.5 release, both arms straight' },
+  // Follow-through -- out to the lead side and up, shallower than the backswing.
+  { t: 0.8505, thetaDeg: -72, u: 0.0219, v: -0.322, cockDeg: 28.8, bowDeg: 17.8, faceDeg: -13.2, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.8756, thetaDeg: -90, u: 0.0618, v: -0.2624, cockDeg: 10.2, bowDeg: 67.5, faceDeg: -13.6, label: 'P9 shoulders 90° to target' },
+  // The finish folds the club right back over the shoulder: 171 degrees of hinge
+  // away from the forearm. It used to be capped at 82, because the old wrist chart
+  // was a hemisphere and could not show more; the torso-frame chart holds the
+  // whole sphere, so the cap is gone and the finish is the real one.
+  { t: 1.0, thetaDeg: -120, u: 0.1912, v: -0.0014, cockDeg: 71.2, bowDeg: 155.5, faceDeg: -15.5, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -159,15 +180,27 @@ export const REFERENCE_KEYFRAMES = [
  *
  * `monotone` additionally applies the Fritsch-Carlson limiter, which forbids the
  * cubic from overshooting the keyframe values it passes through: the tangent goes
- * to zero at a local extremum and is capped elsewhere. That is used for the torso
- * angle and ONLY for the torso angle, because those values are pinned by the
- * P-system -- P4 IS 90 degrees of shoulder turn by definition, so interpolating
- * through 97 on the way is wrong, not merely ugly.
+ * to zero at a local extremum and is capped elsewhere.
  *
- * The hand track deliberately does not use it. There the limiter would be
- * actively harmful: u and v both reverse at the top, so zeroing both tangents
- * would stop the hand dead and produce a far worse cusp than the one being fixed.
- * The hand path is a free curve and only needs to be smooth.
+ * It is applied to the torso angle and to the hand's `u`, and NOT to `v`. That
+ * split is not taste, it is what each coordinate means:
+ *
+ *   thetaDeg  pinned by the P-system. P4 IS 90 degrees of shoulder turn by
+ *             definition, so interpolating through 97 on the way is wrong, not
+ *             merely ugly.
+ *   u         BOUNDED by the arm rules. `freeArmULimit` shows the free arm runs
+ *             out of length a few millimetres either side of the sternum, so an
+ *             overshoot in u is not a cosmetic bulge -- it is a pose the arms
+ *             cannot make. Unlimited, the takeaway (u flat at 0 on both sides,
+ *             then a hard turn at P2) bulged 2.5 cm to the lead side and broke
+ *             that limit on 681 of 4000 samples. Limited, u is exactly 0 across
+ *             the takeaway and the count is zero.
+ *   v         FREE, and it has to stay free. u and v both turn at the top, so
+ *             limiting v as well would zero both tangents at P4 and stop the hand
+ *             dead: the world path's largest velocity-direction step goes from
+ *             1.2 degrees to 170, a genuine cusp with a zero-radius corner. Left
+ *             free, v floats 2.1 cm past the top and comes back -- which is the
+ *             transition float, and is what a real hand path does.
  */
 function tangent(keys, i, get, monotone = false, isStraight = () => false) {
   const prev = keys[i - 1];
@@ -350,24 +383,37 @@ export class SwingPath {
     const isStraight = (index) =>
       index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
 
-    /** Free curve, no overshoot limiting and no straight-segment rule. */
-    const curve = (name) => hermite(keys, i, localT, span, (k) => k[name], false);
     /**
-     * The hand track. The straight-segment rule applies HERE ONLY. It exists to
-     * stop the cubic bulging when two keyframes are close together in the (u, v)
-     * plane, which is a statement about the drawn path and nothing else. Letting
-     * it also straighten the angle track would make the torso turn at a constant
-     * rate for the whole of that segment -- and since the takeaway is a straight
-     * segment lasting 273 ms, that alone put the torso at 80 deg/s at address,
-     * with the golfer standing still.
+     * The wrist channels. `cockDeg` and `bowDeg` are overshoot-limited for the
+     * same reason `u` is, one level further out: an overshoot in the wrist is a
+     * wobble of the SHAFT, and the clubhead sits a metre from the hand, so a few
+     * degrees of it draws a large curl in the head's trace. `bowDeg` turns at the
+     * top (71 -> 27 -> 47), and unlimited the cubic dipped several degrees below
+     * that 27 and came back: measured over the top, the head's trace turned
+     * through 527 degrees -- more than a full circle, which is exactly the extra
+     * loop it looked like -- against 345 with the limiter.
+     *
+     * `faceDeg` is left free. It is monotone across the whole swing, so there is
+     * nothing for a limiter to catch, and the roll should not be made to pause at
+     * a keyframe.
+     */
+    const curve = (name) =>
+      hermite(keys, i, localT, span, (k) => k[name], name !== 'faceDeg');
+    /**
+     * The hand track. `u` is overshoot-limited and `v` is not -- see `tangent` --
+     * and this is the only track the straight-segment rule applies to. Letting
+     * that rule also straighten the angle track would make the torso turn at a
+     * constant rate for the whole of that segment, and since the takeaway is a
+     * straight segment lasting 273 ms, that alone put the torso at 80 deg/s at
+     * address, with the golfer standing still.
      */
     const hand = (name) =>
       straight
         ? lerp((k) => k[name])
-        : hermite(keys, i, localT, span, (k) => k[name], false, isStraight);
+        : hermite(keys, i, localT, span, (k) => k[name], name === 'u', isStraight);
 
-    // The torso angle is pinned by the P-system, so it alone is interpolated
-    // without overshoot; every other track is a free curve.
+    // The torso angle is pinned by the P-system, so it is interpolated without
+    // overshoot; the wrist channels are free curves.
     const thetaDeg = hermite(keys, i, localT, span, (k) => k.thetaDeg, true);
     return {
       theta: rad(thetaDeg),

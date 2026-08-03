@@ -20,8 +20,8 @@
       <p class="sub">
         Drag on a torso-fixed rectangle; the perpendicular distance from it is solved so the
         locked arm stays straight. Left: the rectangle head-on, relative to the
-        elbow&nbsp;line. Middle: the club's direction seen from the wrist. Right: the
-        same motion in world space.
+        elbow&nbsp;line. Middle: which way the club points, in the same torso frame,
+        with the hand at the centre. Right: the same motion in world space.
       </p>
     </header>
 
@@ -44,8 +44,8 @@
 
       <section id="wrist-pane" class="pane">
         <div class="pane-title">
-          <span>3D — wrist (club vs forearm)</span>
-          <span class="hint">drag the handle · dial rolls the face</span>
+          <span>3D — club aim (torso frame)</span>
+          <span class="hint">drag to aim the club · dial rolls the face</span>
         </div>
         <div class="stack">
           <canvas id="wrist-canvas"></canvas>
@@ -54,7 +54,7 @@
         <ul class="legend">
           <li><i class="swatch" style="background: #e6eef8"></i>shaft</li>
           <li><i class="swatch" style="background: #ffd166"></i>face</li>
-          <li>centre = club in&nbsp;line with the arm</li>
+          <li>centre = club hanging straight&nbsp;down · rim = straight&nbsp;up</li>
         </ul>
       </section>
 
@@ -82,12 +82,12 @@
         </label>
         <label class="slider club" title="Standard club specs. Picking a club sets the address: longer club, more upright spine, higher hands, ball further away and further forward in the stance.">
           <span>club</span>
-          <input id="club" type="range" min="0" max="5" step="1" value="2" list="club-ticks" />
+          <input id="club" type="range" min="0" max="5" step="1" value="5" list="club-ticks" />
           <datalist id="club-ticks">
             <option value="0"></option><option value="1"></option><option value="2"></option>
             <option value="3"></option><option value="4"></option><option value="5"></option>
           </datalist>
-          <output id="club-out">Mid iron</output>
+          <output id="club-out">Driver</output>
         </label>
       </div>
 
