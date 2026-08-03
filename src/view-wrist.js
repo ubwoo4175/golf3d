@@ -11,20 +11,23 @@
  *   +X   the cock axis  -- hinging in the plane of the two forearms
  *   +Z   the bow axis   -- hinging out of that plane
  *
- * THE DOME is the surface the clubhead sweeps: every direction the shaft can
- * point, at one shaft length from the hand. It is drawn hollow-side-down over the
- * hand, and the clubhead sits ON it, so the handle you drag and the clubhead are
- * the same object. The rings are hinge latitudes at 30 / 60 / 90 / 120 / 150
- * degrees from the forearm axis.
+ * THE DOME is looked at STRAIGHT DOWN the forearm axis, through an orthographic
+ * camera, so it reads as a circle centred on the hand. Contour rings at 30 / 60 /
+ * 90 / 120 / 150 degrees of hinge, and the shading of the raised surface, are
+ * what make it read as a hemisphere rather than a flat disk.
  *
- * The camera looks at the hand from the front with the forearm running DOWN the
- * screen, which is the framing the flat version had and the one that reads as a
- * wrist rather than as a chart. Dragging ray-casts onto the dome, so the clubhead
- * goes where the cursor goes.
+ * The screen radius is proportional to the HINGE ANGLE, not to the sine of it.
+ * That matters and is the whole reason the camera can point straight down: a true
+ * orthographic picture of a sphere folds everything past 90 degrees back inside
+ * the rim, so two different clubs land on the same pixel and a drag cannot tell
+ * them apart. Spacing the rings evenly in angle instead keeps the map one-to-one
+ * all the way to 150 degrees, which the finish needs. The height of the surface
+ * is then purely cosmetic -- it is what the contours and the shading describe --
+ * and it does not affect where anything lands on screen.
  *
- * That mapping is still one-to-one with `(cockDeg, bowDeg)` -- the stored pair is
- * the dome point in azimuthal-equidistant coordinates. See the exponential-map
- * note in club.js for why the pair is stored that way round.
+ * So the drag is exactly the flat chart's drag: screen position IS `(cockDeg,
+ * bowDeg)`. See the exponential-map note in club.js for why the pair is stored
+ * that way round.
  *
  * A 2D overlay carries the text and the face dial. Roll about the shaft is the
  * third degree of freedom, and having no direction of its own it has nowhere to
@@ -40,11 +43,12 @@ import { phaseAt, RELEASE_T } from './swing.js';
 import { clamp } from './vec3.js';
 
 const GRAB_RADIUS_PX = 15;
-/** How far the wrist can hinge, and the dome radius, which is the shaft length. */
+/** How far the wrist can hinge, and the screen radius that maps to it. */
 const MAX_DEG = 150;
-const SHAFT_LEN = 0.95;
+const CHART_R = 1;
+/** Height of the cosmetic dome at zero hinge. Affects shading only. */
+const DOME_H = 0.62;
 const RINGS = [30, 60, 90, 120, 150];
-const FOREARM_LEN = 0.45;
 const DIAL_RADIUS = 30;
 const DIAL_INSET = 46;
 
@@ -72,15 +76,13 @@ export class WristView {
     // Fixed direction, distance fitted to the pane -- see `frame()`. This pane is
     // tall and narrow, so a hard-coded distance that looks right on one shape
     // clips the chart on another.
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.05, 40);
-    // From the front and a little above: the forearm runs down the screen and the
-    // club stands up out of the dome. Straight down the forearm axis would put
-    // the club end-on and foreshorten it to a dot.
-    this.viewDir = new THREE.Vector3(0.30, 0.34, 1.0).normalize();
-    this.target = v3(0, 0.3, 0);
-
-    this.raycaster = new THREE.Raycaster();
-    this.domeRadius = SHAFT_LEN;
+    // Orthographic and straight down. Perspective would scale the contour rings
+    // by their height and pull the map off the even angular spacing it depends
+    // on; orthographic makes screen position exactly the stored pair.
+    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 20);
+    this.camera.position.set(0, 6, 0);
+    this.camera.up.set(0, 0, -1);
+    this.camera.lookAt(0, 0, 0);
 
     this.build();
     this.resize();
@@ -90,86 +92,101 @@ export class WristView {
   // --- scene ---------------------------------------------------------------
 
   build() {
-    this.scene.add(new THREE.HemisphereLight('#cfe4ff', '#141c2c', 1.0));
-    const key = new THREE.DirectionalLight('#ffffff', 1.0);
-    key.position.set(2, 3, 2);
+    // Lit from LOW and to one side, not from the camera. Overhead light on a
+    // top-down dome is nearly uniform, which is what made the surface read as a
+    // flat disk -- the whole job of the shading here is to say "this is raised".
+    this.scene.add(new THREE.AmbientLight('#4a5f80', 0.55));
+    const key = new THREE.DirectionalLight('#eaf2ff', 1.5);
+    key.position.set(-2.2, 1.1, -1.6);
     this.scene.add(key);
+    const fill = new THREE.DirectionalLight('#3d5f8f', 0.7);
+    fill.position.set(2.0, 0.6, 1.8);
+    this.scene.add(fill);
 
-    // The dome: every direction the shaft can point, at one shaft length. Drawn
-    // double-sided and faint so the club reads whether it is in front of the
-    // surface or behind it.
-    this.scene.add(
-      new THREE.Mesh(
-        new THREE.SphereGeometry(SHAFT_LEN, 48, 32, 0, Math.PI * 2, 0, (MAX_DEG * Math.PI) / 180),
-        new THREE.MeshBasicMaterial({
-          color: '#16233a',
-          transparent: true,
-          opacity: 0.4,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        }),
-      ),
+    // The dome surface: a lathe of the profile (radius, height) against hinge.
+    // Radius is even in ANGLE so the map stays one-to-one; height is the cosmetic
+    // part that the shading and the contours describe.
+    const profile = [];
+    for (let i = 0; i <= 60; i += 1) {
+      const deg = (MAX_DEG * i) / 60;
+      profile.push(new THREE.Vector2(this.chartRadius(deg), this.domeHeight(deg)));
+    }
+    const surface = new THREE.Mesh(
+      new THREE.LatheGeometry(profile, 72),
+      new THREE.MeshStandardMaterial({
+        color: '#24374f',
+        roughness: 0.62,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      }),
     );
+    this.scene.add(surface);
 
-    // Hinge latitudes, and meridians every 30 degrees of bearing.
+    // Contour rings, on the surface, one per labelled hinge angle.
     for (const deg of RINGS) {
-      const a = (deg * Math.PI) / 180;
+      const r = this.chartRadius(deg);
+      const y = this.domeHeight(deg) + 0.004;
       const pts = [];
-      for (let i = 0; i <= 96; i += 1) {
-        const b = (i / 96) * Math.PI * 2;
-        pts.push(
-          v3(
-            SHAFT_LEN * Math.sin(a) * Math.cos(b),
-            SHAFT_LEN * Math.cos(a),
-            SHAFT_LEN * Math.sin(a) * Math.sin(b),
-          ),
-        );
+      for (let i = 0; i <= 128; i += 1) {
+        const b = (i / 128) * Math.PI * 2;
+        pts.push(v3(r * Math.cos(b), y, r * Math.sin(b)));
       }
       this.scene.add(
         new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(pts),
           new THREE.LineBasicMaterial({
-            color: '#4a6080',
+            color: '#6f8bb0',
             transparent: true,
-            opacity: deg === 90 ? 0.75 : 0.35,
+            opacity: deg === 90 ? 0.85 : 0.45,
           }),
         ),
       );
     }
-    const meridians = [];
+    // Fainter contours between the labelled ones, so the surface reads as a
+    // continuous dome rather than five steps.
+    const minor = [];
+    for (let deg = 15; deg < MAX_DEG; deg += 15) {
+      if (RINGS.includes(deg)) continue;
+      const r = this.chartRadius(deg);
+      const y = this.domeHeight(deg) + 0.003;
+      for (let i = 0; i < 128; i += 1) {
+        const b0 = (i / 128) * Math.PI * 2;
+        const b1 = ((i + 1) / 128) * Math.PI * 2;
+        minor.push(v3(r * Math.cos(b0), y, r * Math.sin(b0)), v3(r * Math.cos(b1), y, r * Math.sin(b1)));
+      }
+    }
+    // Meridians every 30 degrees of bearing, following the surface.
     for (let b = 0; b < 360; b += 30) {
-      const r = (b * Math.PI) / 180;
-      for (let i = 0; i < 24; i += 1) {
-        const a0 = ((MAX_DEG * i) / 24) * (Math.PI / 180);
-        const a1 = ((MAX_DEG * (i + 1)) / 24) * (Math.PI / 180);
-        meridians.push(
-          v3(SHAFT_LEN * Math.sin(a0) * Math.cos(r), SHAFT_LEN * Math.cos(a0), SHAFT_LEN * Math.sin(a0) * Math.sin(r)),
-          v3(SHAFT_LEN * Math.sin(a1) * Math.cos(r), SHAFT_LEN * Math.cos(a1), SHAFT_LEN * Math.sin(a1) * Math.sin(r)),
+      const rad = (b * Math.PI) / 180;
+      for (let i = 0; i < 40; i += 1) {
+        const d0 = (MAX_DEG * i) / 40;
+        const d1 = (MAX_DEG * (i + 1)) / 40;
+        minor.push(
+          v3(this.chartRadius(d0) * Math.cos(rad), this.domeHeight(d0) + 0.003, this.chartRadius(d0) * Math.sin(rad)),
+          v3(this.chartRadius(d1) * Math.cos(rad), this.domeHeight(d1) + 0.003, this.chartRadius(d1) * Math.sin(rad)),
         );
       }
     }
     this.scene.add(
       new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(meridians),
-        new THREE.LineBasicMaterial({ color: '#33415c', transparent: true, opacity: 0.4 }),
+        new THREE.BufferGeometry().setFromPoints(minor),
+        new THREE.LineBasicMaterial({ color: '#4a6080', transparent: true, opacity: 0.3 }),
       ),
     );
 
-    // The lead forearm, running down from the hand: the axis everything is
-    // measured against, and the club's position at zero hinge.
-    this.scene.add(this.cylinder(0.026, '#5c6a7d', v3(0, 0, 0), v3(0, -FOREARM_LEN, 0)));
-    this.zeroMark = this.cylinder(0.005, '#40506a', v3(0, 0, 0), v3(0, SHAFT_LEN * 0.5, 0));
-    this.scene.add(this.zeroMark);
-
+    // The hand sits at the apex, which is the centre of the circle. The forearm
+    // runs straight away from the camera in this view, so there is nothing to
+    // draw for it -- the centre of the chart IS the forearm axis.
     const hand = new THREE.Mesh(
-      new THREE.SphereGeometry(0.045, 20, 16),
+      new THREE.SphereGeometry(0.05, 20, 16),
       new THREE.MeshStandardMaterial({ color: COLORS.hand, roughness: 0.4 }),
     );
+    hand.position.set(0, DOME_H + 0.02, 0);
     this.scene.add(hand);
 
     // The club: shaft, head body and face, in a group whose basis is set from the
     // shaft direction and the roll each frame.
-    this.shaft = this.cylinder(0.013, COLORS.shaft, v3(0, 0, 0), v3(0, 1, 0));
+    this.shaft = this.cylinder(0.022, COLORS.shaft, v3(0, 0, 0), v3(0, 1, 0));
     this.scene.add(this.shaft);
     this.headGroup = new THREE.Group();
     this.scene.add(this.headGroup);
@@ -187,10 +204,9 @@ export class WristView {
       c.geometry?.dispose();
       c.material?.dispose();
     }
-    // Proportional to the real head but 1.5x oversized: at true scale against a
-    // 0.95-unit shaft the head is 9% of it, too small to read the face on, and
-    // reading the face is what this pane is for.
-    const s = (SHAFT_LEN / 0.84) * 1.5;
+    // Oversized against the chart: reading the face is what this pane is for, and
+    // at true proportion the head would be a speck on a unit circle.
+    const s = 2.0;
     const { length, height, depth } = getClub().head;
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(length * s, height * s, depth * s),
@@ -219,36 +235,40 @@ export class WristView {
     return mesh;
   }
 
+  /** Screen radius for a hinge angle -- even in ANGLE, so the map is 1:1. */
+  chartRadius(hingeDeg) {
+    return (hingeDeg / MAX_DEG) * CHART_R;
+  }
+
+  /** Cosmetic height of the dome at a hinge angle. Shading only. */
+  domeHeight(hingeDeg) {
+    return DOME_H * Math.cos((hingeDeg * Math.PI) / 180);
+  }
+
   /**
-   * Where a (cock, bow) pair puts the clubhead: a point on the dome. The
-   * horizontal axis is mirrored with handedness, the same as the hand panel, so
-   * a cock toward the trail side falls on the same side of the screen in both.
+   * Where a (cock, bow) pair puts the clubhead on the dome. The horizontal axis
+   * is mirrored with handedness, the same as the hand panel, so a cock toward the
+   * trail side falls on the same side of the screen in both.
    */
   chartPoint(cockDeg, bowDeg) {
-    return this.tipFor(cockDeg, bowDeg);
+    const hinge = Math.hypot(cockDeg, bowDeg);
+    const k = hinge > 1e-9 ? this.chartRadius(hinge) / hinge : 0;
+    const H = getRig().H;
+    return v3(-H * cockDeg * k, this.domeHeight(hinge), -bowDeg * k);
   }
 
-  /** The view-space frame the dome is drawn in. */
-  viewFrame() {
-    return {
-      f: { x: 0, y: 1, z: 0 },
-      r: { x: -getRig().H, y: 0, z: 0 },
-      n: { x: 0, y: 0, z: -1 },
-    };
-  }
-
-  /** Inverse of `chartPoint`: a point on the dome back to the stored pair. */
+  /** Inverse of `chartPoint`, from a point's horizontal position alone. */
   chartToWrist(p) {
-    const d = p.clone().normalize();
-    const hinge = (Math.acos(clamp(d.y, -1, 1)) * 180) / Math.PI;
-    const az = Math.atan2(-d.z, -getRig().H * d.x);
-    return { cockDeg: hinge * Math.cos(az), bowDeg: hinge * Math.sin(az) };
+    const r = Math.hypot(p.x, p.z);
+    const hinge = (r / CHART_R) * MAX_DEG;
+    if (hinge < 1e-9) return { cockDeg: 0, bowDeg: 0 };
+    const H = getRig().H;
+    return { cockDeg: (-H * p.x * hinge) / r, bowDeg: (-p.z * hinge) / r };
   }
 
-  /** The shaft tip for a wrist pair, in view space. */
+  /** Alias kept for the frame fit and the track. */
   tipFor(cockDeg, bowDeg) {
-    const d = shaftDirection(this.viewFrame(), cockDeg, bowDeg);
-    return v3(d.x, d.y, d.z).multiplyScalar(SHAFT_LEN);
+    return this.chartPoint(cockDeg, bowDeg);
   }
 
   // --- interaction ---------------------------------------------------------
@@ -258,8 +278,6 @@ export class WristView {
     this.w = Math.max(1, rect.width);
     this.h = Math.max(1, rect.height);
     this.renderer.setSize(this.w, this.h, false);
-    this.camera.aspect = this.w / this.h;
-    this.camera.updateProjectionMatrix();
     this.frame();
 
     const dpr = window.devicePixelRatio || 1;
@@ -275,45 +293,25 @@ export class WristView {
    * about half as wide as it is tall, so fitting only the height leaves the chart
    * running off the sides.
    */
+  /**
+   * Fit the circle to the pane. Orthographic, so this is just the half-extents;
+   * the shorter side binds and the longer one gets the slack.
+   */
   frame() {
-    // Fit the camera to the content by projecting it, rather than by bounding it
-    // with a box or a sphere. Neither approximation survives an oblique camera:
-    // a sphere of the largest dimension wastes a third of the pane, and a box
-    // fitted axis-aligned still let the club run off the top, because a point
-    // high above the target projects further up than its height suggests.
-    //
-    // For a point p measured from the target, with the camera at distance `dist`
-    // along `viewDir`, the depth is `dist - p.d` and the point is inside the
-    // frustum when |p.right| <= tanH * aspect * depth and |p.up| <= tanH * depth.
-    // Each inequality gives a lower bound on `dist`; the answer is the largest.
-    const d = this.viewDir;
-    const right = new THREE.Vector3().crossVectors(v3(0, 1, 0), d).normalize();
-    const up = new THREE.Vector3().crossVectors(d, right).normalize();
-    const tanV = Math.tan((this.camera.fov * Math.PI) / 360);
-    const tanH = tanV * this.camera.aspect;
-
-    this.target.set(0, (SHAFT_LEN - FOREARM_LEN) / 2, 0);
-    const pts = [v3(0, -FOREARM_LEN, 0)];
-    for (let a = 0; a < 360; a += 20) {
-      const r = (a * Math.PI) / 180;
-      // The whole dome, so no hinge angle can push the club out of frame.
-      for (const hinge of [0, 45, 90, 135, MAX_DEG]) {
-        pts.push(this.tipFor(hinge * Math.cos(r), hinge * Math.sin(r)));
-      }
-    }
-
-    let dist = 0;
-    for (const p of pts) {
-      const q = p.clone().sub(this.target);
-      const along = q.dot(d);
-      dist = Math.max(
-        dist,
-        along + Math.abs(q.dot(right)) / tanH,
-        along + Math.abs(q.dot(up)) / tanV,
-      );
-    }
-    this.camera.position.copy(this.target).addScaledVector(d, dist * 1.04);
-    this.camera.lookAt(this.target);
+    const margin = 1.12;
+    const half = CHART_R * margin;
+    const aspect = this.w / this.h;
+    const halfW = aspect >= 1 ? half * aspect : half;
+    const halfH = aspect >= 1 ? half : half / aspect;
+    this.camera.left = -halfW;
+    this.camera.right = halfW;
+    this.camera.top = halfH;
+    this.camera.bottom = -halfH;
+    this.camera.updateProjectionMatrix();
+    // Cached for `rayToChart`, which undoes exactly this mapping.
+    this.fit = margin;
+    this.camera.aspectX = halfW / half;
+    this.camera.aspectZ = halfH / half;
   }
 
   layout() {
@@ -332,31 +330,18 @@ export class WristView {
   }
 
   /**
-   * Where the pointer ray meets the dome, in view space.
-   *
-   * A ray that misses the dome is projected onto its silhouette rather than
-   * ignored, so dragging past the edge slides along the rim instead of sticking.
+   * Where the pointer is on the chart. With an orthographic camera pointing
+   * straight down, screen position and chart position are the same thing up to a
+   * scale, so this only has to undo that scale -- no ray-sphere solve, and no
+   * near/far branch to get wrong.
    */
   rayToChart(x, y) {
-    this.raycaster.setFromCamera(
-      new THREE.Vector2((x / this.w) * 2 - 1, -(y / this.h) * 2 + 1),
-      this.camera,
+    const half = CHART_R * this.fit;
+    return v3(
+      ((x / this.w) * 2 - 1) * half * this.camera.aspectX,
+      0,
+      ((y / this.h) * 2 - 1) * half * this.camera.aspectZ,
     );
-    const { origin: o, direction: d } = this.raycaster.ray;
-    const R = this.domeRadius;
-    const b = 2 * o.dot(d);
-    const c = o.lengthSq() - R * R;
-    const disc = b * b - 4 * c;
-    if (disc <= 0) {
-      const t = -o.dot(d);
-      return o.clone().addScaledVector(d, t).normalize().multiplyScalar(R);
-    }
-    const root = Math.sqrt(disc);
-    const t1 = (-b - root) / 2;
-    const t2 = (-b + root) / 2;
-    // The near hit is the front of the dome, which is what the cursor is over.
-    const t = t1 > 0 ? t1 : t2;
-    return o.clone().addScaledVector(d, t);
   }
 
   pickKeyframe(x, y) {
@@ -451,18 +436,21 @@ export class WristView {
   draw(pose) {
     const { cockDeg, bowDeg, faceDeg } = pose.wrist;
 
-    const tip = this.tipFor(cockDeg, bowDeg);
+    const hand = v3(0, DOME_H, 0);
+    const tip = this.chartPoint(cockDeg, bowDeg);
+    const along = tip.clone().sub(hand);
+    const len = Math.max(along.length(), 1e-4);
+    const dir = along.clone().divideScalar(len);
 
-    this.shaft.position.set(0, 0, 0);
-    this.shaft.quaternion.setFromUnitVectors(v3(0, 1, 0), tip.clone().normalize());
-    this.shaft.scale.set(1, SHAFT_LEN, 1);
+    this.shaft.position.copy(hand);
+    this.shaft.quaternion.setFromUnitVectors(v3(0, 1, 0), dir);
+    this.shaft.scale.set(1, len, 1);
 
     // Head orientation: the roll is a rotation about the shaft, so the head frame
     // is the shaft direction plus a reference perpendicular rolled by faceDeg.
     // Reusing the pose's own leading edge would be wrong here -- that is in world
-    // space and this scene is in the hand frame -- so it is rebuilt locally.
-    const dir = tip.clone().normalize();
-    let ref = new THREE.Vector3(0, 0, 1).cross(dir);
+    // space and this scene is the chart -- so it is rebuilt locally.
+    let ref = new THREE.Vector3(0, 1, 0).cross(dir);
     if (ref.lengthSq() < 1e-8) ref = new THREE.Vector3(1, 0, 0);
     ref.normalize();
     const roll = ((CLUB.faceZeroDeg + faceDeg) * Math.PI) / 180;
@@ -535,8 +523,8 @@ export class WristView {
     // the oblique camera does not foreshorten -- on any other bearing the inner
     // rings bunch together and the numbers overlap.
     for (const deg of RINGS) {
-      const p = this.toScreen(this.chartPoint(deg, 0));
-      label(`${deg}°`, p.x, p.y + 4, { color: 'rgba(255,255,255,0.32)' });
+      const p = this.toScreen(this.chartPoint(deg * 0.72, -deg * 0.69));
+      label(`${deg}°`, p.x, p.y + 4, { color: 'rgba(255,255,255,0.42)' });
     }
 
     const active = this.activeIndex();
@@ -555,7 +543,7 @@ export class WristView {
       this.h - 28,
       { align: 'right', color: 'rgba(255,255,255,0.7)' },
     );
-    const origin = this.toScreen(v3(0, 0, 0));
+    const origin = this.toScreen(v3(0, DOME_H, 0));
     label('hand', origin.x + 14, origin.y + 18, { align: 'left', color: 'rgba(255,255,255,0.55)' });
 
     this.drawDial(pose);

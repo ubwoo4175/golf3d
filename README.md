@@ -5,9 +5,9 @@ torso** through a golf swing, shaped after Rory McIlroy's sequencing.
 
 - **Left — 2D hand rectangle.** The torso-fixed rectangle seen head-on, relative
   to the elbow line. Drag here to reshape the swing.
-- **Below it — 3D wrist chart.** The club's direction relative to the lead
-  forearm, with the hand pinned at the centre. Drag the handle; a dial rolls the
-  face.
+- **Below it — wrist dome.** The club's direction relative to the lead forearm,
+  looked at straight down, so it reads as a circle centred on the hand. Drag the
+  clubhead; a dial rolls the face.
 - **Right — 3D world space.** The same motion with the torso rotating about a
   fixed spine axis, plus the hand and clubhead paths.
 
@@ -573,9 +573,20 @@ azimuth is ill-conditioned when the hinge is small, which at address and at
 release it is. In `(cock, bow)` those same keyframes are a few degrees apart and
 interpolate cleanly.
 
-The wrist panel is that chart drawn directly: hand pinned at the centre near the
-bottom, distance from it the hinge, direction from it the way it hinges. So the
-line from the centre to the handle **is** the shaft.
+The wrist panel is that chart drawn directly, looked at **straight down the
+forearm axis** through an orthographic camera. The hand is the centre of the
+circle, distance from it is the hinge, direction round it is the way it hinges —
+so screen position simply *is* `(cockDeg, bowDeg)`, and dragging needs no solve
+at all. Contour rings at 30 / 60 / 90 / 120 / 150° and the shading of the raised
+surface are what make it read as a hemisphere rather than a flat disk.
+
+The screen radius is proportional to the hinge **angle**, not to its sine, and
+that is the reason the camera can point straight down at all. A true orthographic
+picture of a hemisphere folds everything past 90° back inside the rim, so two
+different clubs land on the same pixel and a drag cannot tell them apart. Even
+angular spacing keeps the map one-to-one out to 150°, which the finish needs at
+148°. The height of the surface is therefore cosmetic — it is what the contours
+and the shading describe, and it never affects where anything lands on screen.
 
 ### Where the club's defaults come from
 
