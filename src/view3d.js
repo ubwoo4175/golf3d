@@ -11,6 +11,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { BODY, PLANE, SCENE, CLUB, COLORS } from './config.js';
+
+/**
+ * Where the hosel sits on the head, as fractions of the head's own dimensions:
+ * in from the heel, up toward the crown, and how far the neck rises above it.
+ */
+const HOSEL = { heel: 0.42, crown: 0.4, neck: 0.55 };
 import { HIP_PIVOT, getRig, getClub, planeToWorld, ballPosition } from './rig.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
@@ -364,23 +370,40 @@ export class SceneView {
       child.material?.dispose();
     }
     const { length, height, depth } = getClub().head;
+    // Local frame is (leadingEdge, headUp, faceNormal), and the group sits at
+    // `club.head` -- the middle of the face, which is where the ball is struck.
+    // So the BODY is centred on the origin and the shaft stops short of it at the
+    // hosel; see `hoselPoint`. Offsetting the body instead, with the shaft still
+    // running to the group origin, ran the shaft straight through the middle of
+    // the head, which is what made it look skewered on.
     const body = new THREE.Mesh(
       new THREE.BoxGeometry(length, height, depth),
       new THREE.MeshStandardMaterial({ color: '#c8d2de', roughness: 0.35, metalness: 0.6 }),
     );
-    // Local frame is (leadingEdge, headUp, faceNormal). `headUp` works out to
-    // -shaftDir, so a POSITIVE y offset sits the head back toward the grip -- the
-    // shaft meets the head at its crown, near the heel, exactly as a hosel does.
-    // Negative pushed the body out past the end of the shaft instead, which read
-    // as the head hanging off the wrong side and, at address, buried it below the
-    // ball rather than behind it.
-    body.position.set(length * 0.32, height * 0.35, 0);
     const face = new THREE.Mesh(
       new THREE.BoxGeometry(length * 0.92, height * 0.86, 0.004),
       new THREE.MeshStandardMaterial({ color: COLORS.face, roughness: 0.5 }),
     );
-    face.position.set(length * 0.32, height * 0.35, depth / 2 + 0.002);
-    this.headGroup.add(body, face);
+    face.position.set(0, 0, depth / 2 + 0.002);
+    // The hosel: a short neck from the heel-and-crown corner up to where the
+    // shaft ends, so the join reads as a join rather than a puncture.
+    const h = HOSEL;
+    const hosel = new THREE.Mesh(
+      new THREE.CylinderGeometry(CLUB.shaftRadius * 1.5, CLUB.shaftRadius * 1.5, 1, 10),
+      new THREE.MeshStandardMaterial({ color: '#aab6c4', roughness: 0.4, metalness: 0.5 }),
+    );
+    hosel.geometry.translate(0, 0.5, 0);
+    hosel.position.set(-length * h.heel, height * h.crown, 0);
+    hosel.scale.set(1, height * h.neck, 1);
+    this.headGroup.add(body, face, hosel);
+  }
+
+  /** Where the shaft ends: the top of the hosel, in world space. */
+  hoselPoint(club) {
+    const { length, height } = getClub().head;
+    const headUp = V.normalize(V.cross(club.faceNormal, club.leadingEdge));
+    let p = V.addScaled(club.head, club.leadingEdge, -length * HOSEL.heel);
+    return V.addScaled(p, headUp, height * (HOSEL.crown + HOSEL.neck));
   }
 
   buildPaths() {
@@ -460,7 +483,7 @@ export class SceneView {
     // The club. The head group's basis is (leadingEdge, headUp, faceNormal), so
     // the box only has to be positioned once in `buildHead` and re-oriented here.
     const club = pose.club;
-    this.shaft.aim(club.butt, club.head);
+    this.shaft.aim(club.butt, this.hoselPoint(club));
     this.headGroup.position.copy(v3(club.head));
     const headUp = V.normalize(V.cross(club.faceNormal, club.leadingEdge));
     this.headGroup.setRotationFromMatrix(

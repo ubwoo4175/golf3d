@@ -5,9 +5,9 @@ torso** through a golf swing, shaped after Rory McIlroy's sequencing.
 
 - **Left — 2D hand rectangle.** The torso-fixed rectangle seen head-on, relative
   to the elbow line. Drag here to reshape the swing.
-- **Below it — wrist dome.** The club's direction relative to the lead forearm,
-  looked at straight down, so it reads as a circle centred on the hand. Drag the
-  clubhead; a dial rolls the face.
+- **Below it — wrist hemisphere.** The club's direction relative to the lead
+  forearm, looked at straight down, so it reads as a circle centred on the hand.
+  Drag the clubhead; a dial rolls the face.
 - **Right — 3D world space.** The same motion with the torso rotating about a
   fixed spine axis, plus the hand and clubhead paths.
 
@@ -573,20 +573,25 @@ azimuth is ill-conditioned when the hinge is small, which at address and at
 release it is. In `(cock, bow)` those same keyframes are a few degrees apart and
 interpolate cleanly.
 
-The wrist panel is that chart drawn directly, looked at **straight down the
-forearm axis** through an orthographic camera. The hand is the centre of the
-circle, distance from it is the hinge, direction round it is the way it hinges —
-so screen position simply *is* `(cockDeg, bowDeg)`, and dragging needs no solve
-at all. Contour rings at 30 / 60 / 90 / 120 / 150° and the shading of the raised
-surface are what make it read as a hemisphere rather than a flat disk.
+The wrist panel is a **real hemisphere** of radius one shaft length, looked at
+straight down the forearm axis through an orthographic camera. The hand is the
+centre of the sphere and of the circle; the clubhead sits on the surface; the
+shaft runs between them, drawn **translucent** because from directly above a
+leaning shaft is foreshortened and its lean is the thing worth seeing.
 
-The screen radius is proportional to the hinge **angle**, not to its sine, and
-that is the reason the camera can point straight down at all. A true orthographic
-picture of a hemisphere folds everything past 90° back inside the rim, so two
-different clubs land on the same pixel and a drag cannot tell them apart. Even
-angular spacing keeps the map one-to-one out to 150°, which the finish needs at
-148°. The height of the surface is therefore cosmetic — it is what the contours
-and the shading describe, and it never affects where anything lands on screen.
+Contours are lines of equal **height**, as on a topographic map. On a sphere they
+bunch toward the rim, and that bunching is the depth cue — rings spaced by angle
+would be evenly spaced and read as a flat target. A few hinge angles are numbered
+at their true radii, staggered in bearing so 60° and 90° do not collide: on a
+sphere they sit at radii 0.87 and 1.00.
+
+A hemisphere holds exactly 90° of hinge, and past 90 an orthographic picture folds
+back inside the rim — two clubs on one pixel, a drag that cannot tell them apart.
+So the swing is authored to stay inside 90, **interpolated curve included**: a
+cubic through keyframes that touch the rim overshoots it by up to 17°, which is
+why P3 and P10 sit at 76° and 82° rather than at 90°. Measured, the whole track
+peaks at 89.6°. The cost is that the club folds less far back over the shoulder at
+the finish than a real one does.
 
 ### Where the club's defaults come from
 
@@ -686,6 +691,15 @@ shared.
 The honest fixes are both bigger than a constant: author a hand path per club, or
 make the path's radius scale with club length. Neither is a tuning change, so the
 dip is reported rather than papered over.
+
+### Mounting the head
+
+The head is a box at `club.head` — the middle of the face, which is where the ball
+is struck — and the **shaft stops short of it, at the hosel**: in from the heel,
+up toward the crown, with a short neck bridging the gap. Running the shaft to the
+group origin instead, with the body offset away from it, put the shaft straight
+through the middle of the head, which is what made it look skewered on rather than
+mounted.
 
 ### Extending it
 

@@ -11,23 +11,21 @@
  *   +X   the cock axis  -- hinging in the plane of the two forearms
  *   +Z   the bow axis   -- hinging out of that plane
  *
- * THE DOME is looked at STRAIGHT DOWN the forearm axis, through an orthographic
- * camera, so it reads as a circle centred on the hand. Contour rings at 30 / 60 /
- * 90 / 120 / 150 degrees of hinge, and the shading of the raised surface, are
- * what make it read as a hemisphere rather than a flat disk.
+ * THE HEMISPHERE is a real one, radius = one shaft length, looked at STRAIGHT
+ * DOWN the forearm axis through an orthographic camera. So it draws as a circle,
+ * the clubhead sits on the surface, and the shaft runs from the hand at the
+ * CENTRE of the sphere out to it -- drawn translucent, because seen from directly
+ * above a leaning shaft is foreshortened and the lean is the thing worth seeing.
  *
- * The screen radius is proportional to the HINGE ANGLE, not to the sine of it.
- * That matters and is the whole reason the camera can point straight down: a true
- * orthographic picture of a sphere folds everything past 90 degrees back inside
- * the rim, so two different clubs land on the same pixel and a drag cannot tell
- * them apart. Spacing the rings evenly in angle instead keeps the map one-to-one
- * all the way to 150 degrees, which the finish needs. The height of the surface
- * is then purely cosmetic -- it is what the contours and the shading describe --
- * and it does not affect where anything lands on screen.
+ * Contours are lines of equal HEIGHT, as on a topographic map, which is what
+ * makes a circle read as a dome. They bunch toward the rim exactly as they should
+ * on a sphere, and that bunching is the depth cue.
  *
- * So the drag is exactly the flat chart's drag: screen position IS `(cockDeg,
- * bowDeg)`. See the exponential-map note in club.js for why the pair is stored
- * that way round.
+ * A true hemisphere only holds 90 degrees of hinge, and past 90 an orthographic
+ * picture would fold back inside the rim -- two clubs on one pixel, and a drag
+ * that cannot tell them apart. So the swing is authored to stay inside 90; see
+ * the note on the finish in swing.js. Within that, screen radius is
+ * `sin(hinge)` and the map is one-to-one.
  *
  * A 2D overlay carries the text and the face dial. Roll about the shaft is the
  * third degree of freedom, and having no direction of its own it has nowhere to
@@ -43,12 +41,13 @@ import { phaseAt, RELEASE_T } from './swing.js';
 import { clamp } from './vec3.js';
 
 const GRAB_RADIUS_PX = 15;
-/** How far the wrist can hinge, and the screen radius that maps to it. */
-const MAX_DEG = 150;
+/** A hemisphere holds exactly this much hinge. */
+const MAX_DEG = 90;
 const CHART_R = 1;
-/** Height of the cosmetic dome at zero hinge. Affects shading only. */
-const DOME_H = 0.62;
-const RINGS = [30, 60, 90, 120, 150];
+/** Contour spacing, as a fraction of the sphere radius. Equal HEIGHT steps. */
+const CONTOUR_STEP = 0.1;
+/** Angles worth a number, placed at their true radii. */
+const LABELLED = [30, 60, 90];
 const DIAL_RADIUS = 30;
 const DIAL_INSET = 46;
 
@@ -103,90 +102,96 @@ export class WristView {
     fill.position.set(2.0, 0.6, 1.8);
     this.scene.add(fill);
 
-    // The dome surface: a lathe of the profile (radius, height) against hinge.
-    // Radius is even in ANGLE so the map stays one-to-one; height is the cosmetic
-    // part that the shading and the contours describe.
-    const profile = [];
-    for (let i = 0; i <= 60; i += 1) {
-      const deg = (MAX_DEG * i) / 60;
-      profile.push(new THREE.Vector2(this.chartRadius(deg), this.domeHeight(deg)));
-    }
+    // A real hemisphere. Translucent and double-sided so the shaft inside it
+    // stays visible, with depthWrite off so it never occludes what it contains.
     const surface = new THREE.Mesh(
-      new THREE.LatheGeometry(profile, 72),
+      new THREE.SphereGeometry(CHART_R, 72, 36, 0, Math.PI * 2, 0, Math.PI / 2),
       new THREE.MeshStandardMaterial({
-        color: '#24374f',
-        roughness: 0.62,
+        color: '#2b4060',
+        roughness: 0.7,
         metalness: 0.05,
         side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
       }),
     );
+    surface.renderOrder = 0;
     this.scene.add(surface);
 
-    // Contour rings, on the surface, one per labelled hinge angle.
-    for (const deg of RINGS) {
-      const r = this.chartRadius(deg);
-      const y = this.domeHeight(deg) + 0.004;
-      const pts = [];
-      for (let i = 0; i <= 128; i += 1) {
-        const b = (i / 128) * Math.PI * 2;
-        pts.push(v3(r * Math.cos(b), y, r * Math.sin(b)));
-      }
-      this.scene.add(
-        new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(pts),
-          new THREE.LineBasicMaterial({
-            color: '#6f8bb0',
-            transparent: true,
-            opacity: deg === 90 ? 0.85 : 0.45,
-          }),
-        ),
-      );
-    }
-    // Fainter contours between the labelled ones, so the surface reads as a
-    // continuous dome rather than five steps.
-    const minor = [];
-    for (let deg = 15; deg < MAX_DEG; deg += 15) {
-      if (RINGS.includes(deg)) continue;
-      const r = this.chartRadius(deg);
-      const y = this.domeHeight(deg) + 0.003;
-      for (let i = 0; i < 128; i += 1) {
-        const b0 = (i / 128) * Math.PI * 2;
-        const b1 = ((i + 1) / 128) * Math.PI * 2;
-        minor.push(v3(r * Math.cos(b0), y, r * Math.sin(b0)), v3(r * Math.cos(b1), y, r * Math.sin(b1)));
-      }
-    }
-    // Meridians every 30 degrees of bearing, following the surface.
-    for (let b = 0; b < 360; b += 30) {
-      const rad = (b * Math.PI) / 180;
-      for (let i = 0; i < 40; i += 1) {
-        const d0 = (MAX_DEG * i) / 40;
-        const d1 = (MAX_DEG * (i + 1)) / 40;
-        minor.push(
-          v3(this.chartRadius(d0) * Math.cos(rad), this.domeHeight(d0) + 0.003, this.chartRadius(d0) * Math.sin(rad)),
-          v3(this.chartRadius(d1) * Math.cos(rad), this.domeHeight(d1) + 0.003, this.chartRadius(d1) * Math.sin(rad)),
+    // Contours of equal HEIGHT, like a topographic map. On a sphere they bunch
+    // toward the rim, and that bunching is what reads as curvature -- rings
+    // spaced by angle would be evenly spaced and read as a flat target.
+    const contours = [];
+    for (let k = CONTOUR_STEP; k < 1; k += CONTOUR_STEP) {
+      const y = CHART_R * k;
+      const r = Math.sqrt(Math.max(0, CHART_R * CHART_R - y * y));
+      for (let i = 0; i < 160; i += 1) {
+        const b0 = (i / 160) * Math.PI * 2;
+        const b1 = ((i + 1) / 160) * Math.PI * 2;
+        contours.push(
+          v3(r * Math.cos(b0), y, r * Math.sin(b0)),
+          v3(r * Math.cos(b1), y, r * Math.sin(b1)),
         );
       }
     }
+    const contourLines = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(contours),
+      new THREE.LineBasicMaterial({ color: '#7d9cc4', transparent: true, opacity: 0.42 }),
+    );
+    contourLines.renderOrder = 1;
+    this.scene.add(contourLines);
+
+    // The rim, and meridians every 30 degrees of bearing.
+    const rim = [];
+    for (let i = 0; i <= 160; i += 1) {
+      const b = (i / 160) * Math.PI * 2;
+      rim.push(v3(CHART_R * Math.cos(b), 0, CHART_R * Math.sin(b)));
+    }
     this.scene.add(
-      new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(minor),
-        new THREE.LineBasicMaterial({ color: '#4a6080', transparent: true, opacity: 0.3 }),
+      new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(rim),
+        new THREE.LineBasicMaterial({ color: '#9fb8d8', transparent: true, opacity: 0.8 }),
       ),
     );
+    const meridians = [];
+    for (let b = 0; b < 360; b += 30) {
+      const rad = (b * Math.PI) / 180;
+      for (let i = 0; i < 36; i += 1) {
+        const a0 = ((Math.PI / 2) * i) / 36;
+        const a1 = ((Math.PI / 2) * (i + 1)) / 36;
+        meridians.push(
+          v3(CHART_R * Math.sin(a0) * Math.cos(rad), CHART_R * Math.cos(a0), CHART_R * Math.sin(a0) * Math.sin(rad)),
+          v3(CHART_R * Math.sin(a1) * Math.cos(rad), CHART_R * Math.cos(a1), CHART_R * Math.sin(a1) * Math.sin(rad)),
+        );
+      }
+    }
+    const meridianLines = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(meridians),
+      new THREE.LineBasicMaterial({ color: '#5b779a', transparent: true, opacity: 0.3 }),
+    );
+    meridianLines.renderOrder = 1;
+    this.scene.add(meridianLines);
 
-    // The hand sits at the apex, which is the centre of the circle. The forearm
-    // runs straight away from the camera in this view, so there is nothing to
-    // draw for it -- the centre of the chart IS the forearm axis.
+    // The hand is the CENTRE of the sphere, which is also the centre of the
+    // circle on screen. The forearm runs straight away from the camera in this
+    // view, so there is nothing to draw for it.
     const hand = new THREE.Mesh(
       new THREE.SphereGeometry(0.05, 20, 16),
       new THREE.MeshStandardMaterial({ color: COLORS.hand, roughness: 0.4 }),
     );
-    hand.position.set(0, DOME_H + 0.02, 0);
     this.scene.add(hand);
 
     // The club: shaft, head body and face, in a group whose basis is set from the
     // shaft direction and the roll each frame.
-    this.shaft = this.cylinder(0.022, COLORS.shaft, v3(0, 0, 0), v3(0, 1, 0));
+    // Translucent, and drawn after the dome so it reads through it: from
+    // straight above a leaning shaft is foreshortened, and its lean is what says
+    // how far round the sphere the club has gone.
+    this.shaft = this.cylinder(0.026, COLORS.shaft, v3(0, 0, 0), v3(0, 1, 0));
+    this.shaft.material.transparent = true;
+    this.shaft.material.opacity = 0.62;
+    this.shaft.material.depthWrite = false;
+    this.shaft.renderOrder = 2;
     this.scene.add(this.shaft);
     this.headGroup = new THREE.Group();
     this.scene.add(this.headGroup);
@@ -235,14 +240,14 @@ export class WristView {
     return mesh;
   }
 
-  /** Screen radius for a hinge angle -- even in ANGLE, so the map is 1:1. */
+  /** Screen radius for a hinge angle: the sphere's own, so this is a real dome. */
   chartRadius(hingeDeg) {
-    return (hingeDeg / MAX_DEG) * CHART_R;
+    return CHART_R * Math.sin((hingeDeg * Math.PI) / 180);
   }
 
-  /** Cosmetic height of the dome at a hinge angle. Shading only. */
+  /** Height of the surface at a hinge angle. */
   domeHeight(hingeDeg) {
-    return DOME_H * Math.cos((hingeDeg * Math.PI) / 180);
+    return CHART_R * Math.cos((hingeDeg * Math.PI) / 180);
   }
 
   /**
@@ -260,8 +265,8 @@ export class WristView {
   /** Inverse of `chartPoint`, from a point's horizontal position alone. */
   chartToWrist(p) {
     const r = Math.hypot(p.x, p.z);
-    const hinge = (r / CHART_R) * MAX_DEG;
-    if (hinge < 1e-9) return { cockDeg: 0, bowDeg: 0 };
+    if (r < 1e-9) return { cockDeg: 0, bowDeg: 0 };
+    const hinge = (Math.asin(clamp(r / CHART_R, 0, 1)) * 180) / Math.PI;
     const H = getRig().H;
     return { cockDeg: (-H * p.x * hinge) / r, bowDeg: (-p.z * hinge) / r };
   }
@@ -298,7 +303,9 @@ export class WristView {
    * the shorter side binds and the longer one gets the slack.
    */
   frame() {
-    const margin = 1.12;
+    // Generous enough that the rim clears the pane title, which is drawn over the
+    // top of the canvas rather than above it.
+    const margin = 1.34;
     const half = CHART_R * margin;
     const aspect = this.w / this.h;
     const halfW = aspect >= 1 ? half * aspect : half;
@@ -436,7 +443,7 @@ export class WristView {
   draw(pose) {
     const { cockDeg, bowDeg, faceDeg } = pose.wrist;
 
-    const hand = v3(0, DOME_H, 0);
+    const hand = v3(0, 0, 0);
     const tip = this.chartPoint(cockDeg, bowDeg);
     const along = tip.clone().sub(hand);
     const len = Math.max(along.length(), 1e-4);
@@ -516,16 +523,25 @@ export class WristView {
       ctx.font = opts.font ?? '11px ui-monospace, monospace';
       ctx.fillStyle = opts.color ?? 'rgba(255,255,255,0.5)';
       ctx.textAlign = opts.align ?? 'center';
-      ctx.fillText(text, x, y);
+      // Keep labels inside the canvas: a keyframe near the rim otherwise puts its
+      // name under the pane title or off the edge entirely.
+      const pad = 6;
+      const w = ctx.measureText(text).width;
+      const minX = opts.align === 'left' ? pad : opts.align === 'right' ? w + pad : w / 2 + pad;
+      const maxX = this.w - (opts.align === 'left' ? w + pad : opts.align === 'right' ? pad : w / 2 + pad);
+      ctx.fillText(text, clamp(x, minX, Math.max(minX, maxX)), clamp(y, 26, this.h - pad));
     };
 
-    // Ring labels along the chart's horizontal axis, which is the one direction
-    // the oblique camera does not foreshorten -- on any other bearing the inner
-    // rings bunch together and the numbers overlap.
-    for (const deg of RINGS) {
-      const p = this.toScreen(this.chartPoint(deg * 0.72, -deg * 0.69));
-      label(`${deg}°`, p.x, p.y + 4, { color: 'rgba(255,255,255,0.42)' });
-    }
+    // A few hinge angles numbered at their true radii, on the lower-left
+    // diagonal. The contours themselves are heights, not angles, so without
+    // these there would be no scale to read.
+    // Staggered in bearing as well as radius: on a sphere 60 and 90 degrees sit
+    // at radii 0.87 and 1.00, so on a single bearing their numbers collide.
+    LABELLED.forEach((deg, i) => {
+      const bearing = (-136 + i * 13) * (Math.PI / 180);
+      const p = this.toScreen(this.chartPoint(deg * Math.cos(bearing), deg * Math.sin(bearing)));
+      label(`${deg}°`, p.x, p.y + 4, { color: 'rgba(255,255,255,0.45)' });
+    });
 
     const active = this.activeIndex();
     const k = this.swing.keys[active];
@@ -543,7 +559,7 @@ export class WristView {
       this.h - 28,
       { align: 'right', color: 'rgba(255,255,255,0.7)' },
     );
-    const origin = this.toScreen(v3(0, DOME_H, 0));
+    const origin = this.toScreen(v3(0, 0, 0));
     label('hand', origin.x + 14, origin.y + 18, { align: 'left', color: 'rgba(255,255,255,0.55)' });
 
     this.drawDial(pose);

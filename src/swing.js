@@ -104,7 +104,7 @@ export const REFERENCE_KEYFRAMES = [
   { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3884, cockDeg: -17.3, bowDeg: 13.6, faceDeg: -5.5, label: 'P1.5 takeaway' },
   // Backswing -- convex upward.
   { t: 0.2868, thetaDeg: 40, u: -0.0564, v: -0.2411, cockDeg: -24.8, bowDeg: 28.2, faceDeg: -7.1, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -17.6, bowDeg: 91.9, faceDeg: -8.8, label: 'P3 lead arm parallel' },
+  { t: 0.3556, thetaDeg: 60, u: -0.1492, v: -0.1091, cockDeg: -14.3, bowDeg: 74.6, faceDeg: -8.8, label: 'P3 lead arm parallel' },
   // P4's CLUB position is not something the P-system defines -- P4 is defined by
   // 90 degrees of shoulder turn, not by where the club points. Authoring a "shaft
   // parallel at the top" here was an invented constraint, and it cost 34 degrees
@@ -125,7 +125,12 @@ export const REFERENCE_KEYFRAMES = [
   // Follow-through -- slightly convex UPWARD, unlike the downswing.
   { t: 0.8505, thetaDeg: -72, u: 0.0383, v: -0.2535, cockDeg: 27.5, bowDeg: 9.8, faceDeg: -21.1, label: 'P8 follow-through, shaft parallel' },
   { t: 0.8756, thetaDeg: -90, u: 0.1225, v: -0.1119, cockDeg: 23.5, bowDeg: 51.5, faceDeg: -21.7, label: 'P9 shoulders 90° to target' },
-  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 10.1, bowDeg: 148.3, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
+  // The wrist chart is a true hemisphere, so the whole track has to stay inside
+  // 90 degrees of hinge -- the INTERPOLATED curve, not just the keyframes, which
+  // is why P3 and P10 sit at 76 and 82 rather than at 90. A cubic through
+  // keyframes that touch the rim overshoots it by up to 17 degrees. The club
+  // therefore folds less far back over the shoulder than a real finish does.
+  { t: 1.0, thetaDeg: -120, u: 0.2105, v: 0.0019, cockDeg: 5.6, bowDeg: 81.8, faceDeg: -24.8, label: 'P10 finish, shoulders 120°' },
 ];
 
 
