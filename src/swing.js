@@ -43,10 +43,11 @@
  * not a hand-picked pair of angles. See the club section of the README.
  */
 
-import { rad, deg, sub, dot, clamp } from './vec3.js';
+import * as V from './vec3.js';
+import { rad, sub, clamp } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { naturalAddress, axisDistanceFor } from './arm.js';
-import { ballPosition } from './rig.js';
+import { ballPosition, getRig } from './rig.js';
 import { wristForDirection } from './club.js';
 import { solvePose } from './pose.js';
 
@@ -133,17 +134,25 @@ export const REFERENCE_KEYFRAMES = [
   // hands have already turned back down.
   { t: 0.6075, thetaDeg: 110, u: -0.2025, v: -0.0285, cockDeg: -80.9, bowDeg: 78.9, faceDeg: -9.4, label: 'P4 top, shoulders 110° away' },
   // Transition. The shaft LAYS BACK as the hands drop -- the z component is the
-  // shallowing move, the club falling to a flatter plane behind the hands --
-  // and the hinge deepens to 139 degrees, dynamic lag beyond the top's 113.
-  // On-plane targets here (z = 0) read as over-the-top: the head swept out
-  // toward the ball line while still high, which no tour swing does.
-  { t: 0.7317, thetaDeg: 55, u: -0.1665, v: -0.1875, cockDeg: -93.1, bowDeg: 102.8, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
-  // Delivery: shaft parallel to the ground again, still tipped 7 degrees
-  // inside; the head approaches the ball from behind the hands.
-  { t: 0.7767, thetaDeg: 5, u: -0.0788, v: -0.3578, cockDeg: -63.2, bowDeg: 29.8, faceDeg: -12.1, label: 'P6 delivery, shaft parallel' },
+  // shallowing move, the club falling INTO the 50-degree delivery plane -- and
+  // the hinge deepens to 137 degrees, dynamic lag beyond the top's 113.
+  // Vertical-plane targets here (z = 0) read as over-the-top: the head swept
+  // out toward the ball line while still high, which no tour swing does. From
+  // here to the release every checkpoint direction sits IN the delivery plane,
+  // and because the spherical spline follows great circles between them, the
+  // interpolated shaft stays within 1.5 degrees of that plane -- the flat
+  // down-the-line sheet a real driver sweeps.
+  { t: 0.7317, thetaDeg: 55, u: -0.1665, v: -0.1875, cockDeg: -107.2, bowDeg: 84.5, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
+  // Delivery: shaft parallel to the ground and the target line -- which is
+  // also exactly in the delivery plane, since the plane contains the target
+  // line. Its TIME is solved from the shaft: P6 to impact is 87 degrees of
+  // real arc at ~2600 deg/s.
+  { t: 0.783, thetaDeg: 0, u: -0.0788, v: -0.3578, cockDeg: -61.8, bowDeg: 33.7, faceDeg: -12.2, label: 'P6 delivery, shaft parallel' },
   { t: 0.81, thetaDeg: -35, u: -0.045, v: -0.3812, cockDeg: -16.6, bowDeg: 6.6, faceDeg: -12.6, label: 'P7 impact' },
-  // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.4009, cockDeg: 18.7, bowDeg: -15.5, faceDeg: -12.9, label: 'P7.5 release, both arms straight' },
+  // The handover. Both arms straight, so u must be 0. The shaft target is 55
+  // degrees PAST the ball-aim, still rotating in the delivery plane -- the
+  // club does not stop at inline, it releases through it.
+  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.4009, cockDeg: 12.9, bowDeg: 14.1, faceDeg: -12.9, label: 'P7.5 release, both arms straight' },
   // Follow-through -- the mirror checkpoints of the backswing.
   { t: 0.853, thetaDeg: -72, u: 0.0219, v: -0.322, cockDeg: 29, bowDeg: 17.5, faceDeg: -13.3, label: 'P8 follow-through, shaft parallel' },
   { t: 0.892, thetaDeg: -94, u: 0.0618, v: -0.2624, cockDeg: 7.2, bowDeg: 75.7, faceDeg: -13.9, label: 'P9 shoulders 90° to target' },
@@ -198,6 +207,67 @@ export const REFERENCE_KEYFRAMES = [
  *             free, v floats 2.1 cm past the top and comes back -- which is the
  *             transition float, and is what a real hand path does.
  */
+/**
+ * Log map on the unit sphere: the tangent vector at `a` that points toward `b`,
+ * with length equal to the angle between them (radians). The inverse of
+ * `expMap`. Undefined only at the exact antipode, which two neighbouring
+ * keyframes of a swing never are.
+ */
+function logMap(a, b) {
+  const c = clamp(V.dot(a, b), -1, 1);
+  const angle = Math.acos(c);
+  const perp = V.sub(b, V.scale(a, c));
+  const len = V.length(perp);
+  if (len < 1e-12) return { x: 0, y: 0, z: 0 };
+  return V.scale(perp, angle / len);
+}
+
+/** Exp map: walk from `a` along tangent vector `t` (radians) on the sphere. */
+function expMap(a, t) {
+  const angle = V.length(t);
+  if (angle < 1e-12) return a;
+  const dir = V.scale(t, 1 / angle);
+  return V.normalize(
+    V.addScaled(V.scale(a, Math.cos(angle)), dir, Math.sin(angle)),
+  );
+}
+
+/** Parallel-transport tangent `t` from the tangent plane at `a` to `b`. */
+function transportTangent(a, b, t) {
+  const axis = V.cross(a, b);
+  const sin = V.length(axis);
+  if (sin < 1e-12) return t;
+  const angle = Math.atan2(sin, V.dot(a, b));
+  return V.rotateAbout(t, V.scale(axis, 1 / sin), angle);
+}
+
+/** Geodesic interpolation between two unit vectors. */
+function slerpDir(a, b, s) {
+  return expMap(a, V.scale(logMap(a, b), s));
+}
+
+/**
+ * One cubic segment on the sphere, as a Bezier evaluated by slerp
+ * De Casteljau -- the standard spherical analogue of a Hermite segment.
+ *
+ * The inner control points sit a third of the endpoint tangents away from
+ * their endpoints, which is the exact cubic-Bezier form of a Hermite segment
+ * in the plane; on the sphere it inherits the same endpoint positions and
+ * endpoint velocities, which is all C1 continuity needs. The exp maps only
+ * ever carry the short control offsets (a third of a tangent), never the whole
+ * span, so there is no long-chart distortion even across a 120-degree segment.
+ */
+function sphereCubic(d0, d1, t0, t1, s, span) {
+  const b1 = expMap(d0, V.scale(t0, span / 3));
+  const b2 = expMap(d1, V.scale(t1, -span / 3));
+  const p01 = slerpDir(d0, b1, s);
+  const p12 = slerpDir(b1, b2, s);
+  const p23 = slerpDir(b2, d1, s);
+  const q0 = slerpDir(p01, p12, s);
+  const q1 = slerpDir(p12, p23, s);
+  return slerpDir(q0, q1, s);
+}
+
 function tangent(keys, i, get, monotone = false, isStraight = () => false) {
   const prev = keys[i - 1];
   const next = keys[i + 1];
@@ -351,34 +421,39 @@ export class SwingPath {
   }
 
   /**
-   * The club-aim track: each keyframe's shaft direction as a point on the
-   * TORSO-FRAME direction chart -- the same chart the club-aim panel draws.
+   * The club-aim track: each keyframe's shaft direction as a WORLD unit vector,
+   * plus a tangent for the spherical spline that interpolates between them.
    *
-   *   phi      angle away from straight down the spine axis, degrees
-   *   bearing  which way round the body, from `side` toward `fwd`
-   *   (a, b) = phi * (cos bearing, sin bearing)     the exponential map
+   * This is the third frame the club has been interpolated in, and the
+   * reasoning is a story of two failures:
    *
-   * This exists because of what happened when the club was interpolated in
-   * WRIST coordinates instead. (cock, bow) are joint angles against the lead
-   * forearm, and the forearm itself swings through a huge arc -- so a shaft
-   * direction that moves smoothly through the world is a wildly oscillating
-   * curve in wrist space, and vice versa: smooth wrist curves composed with the
-   * swinging forearm made the world shaft direction WAVE ACROSS THE SWING PLANE
-   * fifteen times in one swing. Every keyframe was authored on plane; all the
-   * waving happened between them. Interpolating on this chart instead makes the
-   * club's motion smooth in the torso frame by construction, and the world
-   * motion is that composed with the (smooth, monotone) torso rotation.
+   *   - WRIST coordinates: (cock, bow) are joint angles against a forearm that
+   *     itself sweeps a huge arc, so smooth wrist curves composed into a world
+   *     shaft direction that waved across the swing plane fifteen times.
+   *   - An EXPONENTIAL CHART (torso-fixed, then world-fixed): better, but any
+   *     single chart of the sphere distorts somewhere, and the swing covers
+   *     260+ degrees of direction space -- there is nowhere safe to put the
+   *     pole. The world chart's pole sat 40 degrees from the impact aim, where
+   *     the map compresses bearing motion three-to-one, and the shaft's
+   *     angular speed collapsed from 3000 deg/s to 850 exactly at impact.
    *
-   * The chart is non-singular everywhere except straight UP the spine axis
-   * (phi = 180), which no part of the swing approaches within 25 degrees.
-   * Keyframes still STORE (cock, bow) -- the club-aim panel drags them, and the
-   * address solver writes them -- so this track is derived, cached against the
-   * revision counter, and reproduces every stored keyframe exactly at its knot.
+   * So the spline now lives ON THE SPHERE itself: geodesic (slerp-style)
+   * Hermite segments, with Bessel tangents built from log-maps at each knot
+   * and parallel-transported between knots. No frame, no pole, no distortion
+   * anywhere -- what is smooth and evenly-paced here is smooth and evenly-
+   * paced on screen, which is the thing the whole app is judged by.
+   *
+   * Keyframes still STORE (cock, bow) -- the club-aim panel drags them, and
+   * the address solver writes them -- so this track is derived, cached against
+   * the revision counter, and reproduces every stored keyframe exactly at its
+   * knot. Handedness needs no special case: a lefty's stored wrist yields
+   * mirrored world directions, and the spline of mirrored knots is the
+   * mirrored spline.
    */
-  aimChart() {
-    if (this.chartRev === this.revision && this.chart) return this.chart;
-    this.chartRev = this.revision;
-    this.chart = this.keys.map((k) => {
+  aimTrack() {
+    if (this.aimRev === this.revision && this.aims) return this.aims;
+    this.aimRev = this.revision;
+    const dirs = this.keys.map((k) => {
       // The keyframe's own pose, from stored values alone -- no interpolation,
       // so this cannot recurse back into sample().
       const pose = solvePose({
@@ -389,16 +464,26 @@ export class SwingPath {
         blend: releaseBlendAt(k.t),
         wrist: k,
       });
-      const d = pose.club.shaftDir;
-      const s = dot(d, pose.basis.side);
-      const up = dot(d, pose.basis.up);
-      const f = dot(d, pose.basis.fwd);
-      const phi = deg(Math.acos(clamp(-up, -1, 1)));
-      const flat = Math.hypot(s, f);
-      if (flat < 1e-9) return { a: 0, b: 0 };
-      return { a: (phi * s) / flat, b: (phi * f) / flat };
+      return pose.club.shaftDir;
     });
-    return this.chart;
+    // Knot tangents: Bessel-weighted average of the one-sided geodesic slopes,
+    // expressed in each knot's own tangent plane. Zero at the ends -- the
+    // golfer is at rest at address and at the finish.
+    const tangents = dirs.map((d, i) => {
+      if (i === 0 || i === dirs.length - 1) return { x: 0, y: 0, z: 0 };
+      const dtPrev = this.keys[i].t - this.keys[i - 1].t;
+      const dtNext = this.keys[i + 1].t - this.keys[i].t;
+      const toPrev = logMap(d, dirs[i - 1]);
+      const toNext = logMap(d, dirs[i + 1]);
+      const w = 1 / (dtPrev + dtNext);
+      return {
+        x: (dtNext * (-toPrev.x / dtPrev) + dtPrev * (toNext.x / dtNext)) * w,
+        y: (dtNext * (-toPrev.y / dtPrev) + dtPrev * (toNext.y / dtNext)) * w,
+        z: (dtNext * (-toPrev.z / dtPrev) + dtPrev * (toNext.z / dtNext)) * w,
+      };
+    });
+    this.aims = { dirs, tangents };
+    return this.aims;
   }
 
   /** Straight-line length of segment `i` in the (u, v) plane, in metres. */
@@ -431,23 +516,13 @@ export class SwingPath {
       index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
 
     /**
-     * The club's aim, interpolated on the torso-frame chart -- see `aimChart`
-     * for why NOT in wrist coordinates. FREE curves, deliberately: the chart
-     * path never doubles back on itself -- the club sweeps continuously round
-     * the body -- so per-channel extrema are places where the path is CURVING,
-     * not turning, and the Fritsch-Carlson limiter's zero-tangent rule is
-     * exactly wrong there. Applied here it froze the club dead for ~30 ms at
-     * P9, where both channels happen to peak together: a visible hitch in the
-     * follow-through, with the clubhead momentarily at 9 m/s between two
-     * 40 m/s neighbours. (The overshoot the limiter would guard against was
-     * real once, but it was the transition targets' fault -- authored on plane
-     * when the real move lays the shaft back INSIDE the plane -- and fixing
-     * the targets removed it; see the P5 keyframe note.)
+     * The club's aim: the spherical spline through the keyframe directions.
+     * See `aimTrack` for why it is neither wrist coordinates nor a chart.
      *
-     * `faceDeg` is a plain free curve too: it is monotone across the whole
-     * swing, so there is nothing for a limiter to catch.
+     * `faceDeg` is a plain free curve: it is monotone across the whole swing,
+     * so there is nothing for a limiter to catch.
      */
-    const chart = this.aimChart();
+    const { dirs, tangents } = this.aimTrack();
     const curve = (get) => hermite(keys, i, localT, span, get, false);
     /**
      * The hand track. `u` is overshoot-limited and `v` is not -- see `tangent` --
@@ -472,11 +547,8 @@ export class SwingPath {
       v: hand('v'),
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
-      /** Torso-chart club aim; `solvePose` turns it back into wrist angles. */
-      aim: {
-        a: curve((k) => chart[keys.indexOf(k)].a),
-        b: curve((k) => chart[keys.indexOf(k)].b),
-      },
+      /** World shaft direction; `solvePose` turns it back into wrist angles. */
+      aim: sphereCubic(dirs[i], dirs[i + 1], tangents[i], tangents[i + 1], localT, span),
       wrist: {
         faceDeg: curve((k) => k.faceDeg),
       },
