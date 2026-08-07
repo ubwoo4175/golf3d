@@ -22,7 +22,7 @@ import {
   getPlaneOffset,
 } from './rig.js';
 import { solveAxisDistance, solveArm, elbowHint } from './arm.js';
-import { solveClub, WRIST_ZERO } from './club.js';
+import { solveClub, wristForDirection, WRIST_ZERO } from './club.js';
 
 /**
  * An orthonormal frame at the hand, which is what a club has to be parented to.
@@ -75,6 +75,12 @@ export function handFrame(hand, leadElbow, trailElbow, basis) {
  * @param {'lead'|'trail'} d.constraint  which arm is held straight
  * @param {number} d.blend       0 = lead arm locked, 1 = trail arm locked
  * @param {object} d.wrist       { cockDeg, bowDeg, faceDeg }
+ * @param {object} [d.aim]       torso-chart club aim { a, b }, degrees. When
+ *   present it overrides the wrist's cock/bow: the shaft direction is rebuilt
+ *   in the torso basis and converted back to wrist angles against this pose's
+ *   own hand frame. This is how the interpolated track arrives -- see
+ *   `SwingPath.aimChart` for why the club is interpolated in the torso frame
+ *   rather than in wrist coordinates.
  */
 export function solvePose({
   theta,
@@ -83,6 +89,7 @@ export function solvePose({
   constraint = 'lead',
   blend = constraint === 'trail' ? 1 : 0,
   wrist = WRIST_ZERO,
+  aim,
   ratio,
 }) {
   const basis = torsoBasis(theta);
@@ -99,6 +106,21 @@ export function solvePose({
   const trail = solveArm(trailShoulder, hand, elbowHint(basis, 'trail'));
 
   const frame = handFrame(hand, lead.elbow, trail.elbow, basis);
+
+  if (aim) {
+    // Chart -> torso direction -> world -> wrist angles. `a` runs along `side`
+    // and `b` along `fwd`, both of which mirror with handedness, so one chart
+    // serves both golfers.
+    const phi = Math.hypot(aim.a, aim.b);
+    const phiRad = (phi * Math.PI) / 180;
+    let dir = V.scale(basis.up, -Math.cos(phiRad));
+    if (phi > 1e-9) {
+      const sin = Math.sin(phiRad) / phi;
+      dir = V.addScaled(dir, basis.side, aim.a * sin);
+      dir = V.addScaled(dir, basis.fwd, aim.b * sin);
+    }
+    wrist = { ...wristForDirection(frame, dir), faceDeg: wrist.faceDeg ?? 0 };
+  }
 
   return {
     theta,

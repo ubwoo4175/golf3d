@@ -298,29 +298,40 @@ what carries the hand around the corner instead of into it.
 ### The P-system and shoulder rotation
 
 `REFERENCE_KEYFRAMES` in `src/swing.js` — 12 keyframes over `t ∈ [0, 1]`, synced
-to a tour long-iron swing.
+to **Rory McIlroy's driver** as measured by TaylorMade's GEARS capture: roughly
+116° of shoulder turn over 42° of hips at the top, a late wrist set, and ~122 mph
+of clubhead speed. This torso is a single rigid rotation, so it carries **110°**
+at the top — between his shoulder and hip numbers, weighted to the shoulder line
+the model actually pins.
 
 | | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | P1 | address | 0.0000 | 0.000 s | 0° | **0.0** | −46.7 | 39.2 |
-| P1.5 | takeaway | 0.2213 | 0.273 s | +22° | **0.0** | −36.5 | 48.8 |
-| P2 | shaft parallel | 0.2868 | 0.354 s | +40° | −6.6 | −23.0 | 53.8 |
-| P3 | lead arm parallel to ground | 0.3556 | 0.439 s | +60° | −12.7 | −13.9 | 53.6 |
-| P4 | top of backswing | 0.6075 | 0.750 s | **+90°** | −20.3 | −2.9 | 50.2 |
-| P5 | early downswing, lead arm parallel | 0.7317 | 0.904 s | +45° | −16.7 | −18.8 | 49.5 |
-| P6 | delivery, shaft parallel | 0.7767 | 0.959 s | **0°** | −7.9 | −35.8 | 45.5 |
-| P7 | impact | 0.8100 | 1.000 s | −35° | −4.5 | −38.1 | 45.6 |
+| P1.5 | takeaway | 0.2149 | 0.265 s | +25° | **0.0** | −36.5 | 48.8 |
+| P2 | shaft parallel | 0.3316 | 0.410 s | +65° | −6.6 | −23.0 | 53.8 |
+| P3 | lead arm parallel, shoulders 90° | 0.4106 | 0.507 s | +90° | −12.7 | −13.9 | 53.6 |
+| P4 | top of backswing | 0.6075 | 0.750 s | **+110°** | −20.3 | −2.9 | 50.2 |
+| P5 | early downswing, lead arm parallel | 0.7317 | 0.904 s | +55° | −16.7 | −18.8 | 49.5 |
+| P6 | delivery, shaft parallel | 0.7767 | 0.959 s | +5° | −7.9 | −35.8 | 45.5 |
+| P7 | impact | 0.8100 | 1.000 s | **−35°** | −4.5 | −38.1 | 45.6 |
 | P7.5 | release, both arms straight | 0.8307 | 1.026 s | −55° | **0.0** | −40.1 | 45.9 |
-| P8 | follow-through, shaft parallel | 0.8505 | 1.050 s | −72° | +2.2 | −32.2 | 50.9 |
-| P9 | shoulders square to target | 0.8756 | 1.081 s | **−90°** | +6.2 | −26.2 | 52.4 |
+| P8 | follow-through, shaft parallel | 0.8530 | 1.053 s | −72° | +2.2 | −32.2 | 50.9 |
+| P9 | shoulders square to target | 0.8920 | 1.102 s | −94° | +6.2 | −26.2 | 52.4 |
 | P10 | finish | 1.0000 | 1.235 s | **−120°** | +19.1 | −0.1 | 51.1 |
 
-The four bold angles are not free parameters — P4, P6, P9 and P10 are *defined*
-by their shoulder rotation, so they are pinned exactly and the rest interpolate
-between them. P7.5's `u = 0` is forced by geometry, not chosen. P1's `u`
-and `v` are the anchored address and are the same for **every** club; the axis
-distance column is solved, never authored. **The `t` column is solved too** — see
-the tempo section below.
+The three bold angles are the measured anchors — 110 at the top, 35 open at
+impact, 120 at the finish. P3 sits at 90 because that is where GEARS puts Rory's
+shoulders at lead-arm-parallel. P7.5's `u = 0` is forced by geometry, not chosen.
+P1's `u` and `v` are the anchored address and are the same for **every** club;
+the axis distance column is solved, never authored.
+
+**Two kinds of times.** The backswing times (P1.5, P2, P3) are the inverse of the
+sin² rate profile below at 25°, 65° and 90°. The release times (P6, P8, P9) are
+solved from the SHAFT instead: the club sweeps its in-plane angle at a roughly
+constant ~2 600 °/s through delivery and decays through the follow-through, and
+those checkpoints sit where that rotation puts them. Getting P8 and P9 wrong by
+a few hundredths — where a uniform spread had them — is what made the clubhead's
+peak speed land 50 ms *after* impact.
 
 **The hand positions are hand-authored — tuned by dragging on this app's own 2D
 panel, not motion-captured.** The wrist track is then solved against them. Treat
@@ -353,7 +364,7 @@ That leaves four unknowns — the backswing amplitude, the downswing peak, the d
 rate, and the total duration — against four hard constraints, all of which come
 from the P-system or from your 3:1 tempo:
 
-- θ = **+90°** at the top (P4 is *defined* as 90° of shoulder turn)
+- θ = **+110°** at the top (Rory's GEARS-measured driver turn, single-axis model)
 - θ = **−35°** at impact
 - θ = **−120°** at the finish (P10 is *defined* as 120°)
 - backswing : downswing = **3 : 1**
@@ -366,41 +377,30 @@ Four and four, so nothing is fitted or tuned. The solution:
 | Downswing (top → impact) | **0.250 s** |
 | Impact → finish | 0.235 s |
 | **Total, `TIMING.swingSeconds`** | **1.235 s** |
-| Peak backswing rotation | **240°/s**, at 0.375 s |
-| Peak downswing rotation | **867°/s**, 40 ms before impact |
+| Peak backswing rotation | **293°/s**, at 0.375 s |
+| Peak downswing rotation | **1014°/s**, measured 25 ms before impact |
 | Ratio, as solved | 3.0000 : 1 |
 
 Every angular velocity scales with `TIMING.swingSeconds`, so changing that one
 number retimes the whole swing without touching the shape.
 
-The peak backswing figure, 240°/s, sits normally in the tour range. **The peak
-downswing figure, 867°/s, is above the commonly published tour thorax range of
+The peak backswing figure, 293°/s, sits normally in the tour range. **The peak
+downswing figure, ~1000°/s, is above the commonly published tour thorax range of
 550–750°/s, and it is worth being clear that this is forced rather than chosen.**
-125° of rotation in 0.25 s is a *mean* of 500°/s on its own, and any profile that
+145° of rotation in 0.25 s is a *mean* of 580°/s on its own, and any profile that
 starts from rest at the top and peaks smoothly puts the peak at roughly 1.7× the
-mean. There is no profile shape that satisfies all four constraints and stays under
-750°/s. Lowering it means changing one of the constraints, not the profile:
+mean. There is no profile shape that satisfies the constraints and stays under
+750°/s. It is also not quite the same quantity: published thorax peaks are
+measured on the *thorax segment* over a moving pelvis, whereas this model has one
+rigid torso carrying shoulders and hips together — Rory's hips alone unwind more
+than 100° from the top to impact, and this axis is carrying that too.
 
-- **less turn at the top** — 80° instead of 90° takes the peak to about 800°/s
-- **less unwind by impact** — −25° instead of −35° takes it to about 790°/s
-- **a slower ratio** — 3.5:1 with the same backswing lengthens the downswing
-- Published thorax peaks are also measured on the *thorax segment*, whereas this
-  model has a single rigid torso carrying the shoulders, so the two are not quite
-  measuring the same thing.
+Measured off the interpolated track: ω = 0.0°/s at address, the top and the
+finish, so the keyframes really do carry the rest points, not just the positions.
 
-All four are one-line edits, and the profile re-solves around whichever you pick.
-
-Reconstructing the profile back out of the 12 interpolated keyframes gives 246°/s
-and 867°/s against the model's 240 and 867, with ω = 0.0 at all three rest points
-— so the keyframe track really does carry the tempo, not just the positions. The
-one thing the reconstruction does not hold exactly is *where* the downswing peak
-falls: the model places it 40 ms before impact, the interpolated track 23 ms. Only
-12 samples describe the whole profile, and the four pinned angles get priority
-over the peak's position.
-
-**The same caveat as everywhere else applies: this is derived from published
-tour-level kinematic ranges and the P-system's own definitions, not from Rory
-McIlroy motion capture, which I do not have.**
+**The same caveat as everywhere else applies: this is derived from Rory's
+published GEARS numbers, standard specs and the P-system's own definitions, not
+from motion capture I have access to.**
 
 ### Interpolation, and keeping the 3D path smooth
 
@@ -421,11 +421,11 @@ generalisation weights each one-sided slope by the *opposite* interval, and
 reduces to the uniform formula when spacing is even.
 
 **2. Monotone limiting — for the torso angle and for `u`, but not `v`.** With
-correct tangents the angle track overshot to **97°** on its way to a P4 that is
-*defined* as 90°. That is a correctness bug, since P4/P6/P9/P10 are pinned by the
-P-system, so the angle track gets a Fritsch-Carlson limiter: zero tangent at a
-local extremum, capped elsewhere. Max turn is now exactly 90.00° at P4 and
-−120.00° at P10.
+correct tangents the angle track overshot by 7° past a top that is a *measured*
+number. That is a correctness bug — the anchors (the top, impact, the finish) are
+data, not shapes — so the angle track gets a Fritsch-Carlson limiter: zero
+tangent at a local extremum, capped elsewhere. Max turn is now exactly 110.00° at
+P4 and −120.00° at P10.
 
 `u` gets it too, for a different reason: `u` is **bounded by the arm rules**.
 `freeArmULimit` shows the free arm runs out of length a few millimetres either
@@ -433,10 +433,10 @@ side of the sternum, so an overshoot in `u` is a pose the arms cannot make. `v`
 does not get it, because limiting both stops the hand dead at the top. The
 numbers for all three cases are in *Why this shape gives a smooth 3D path*.
 
-`cockDeg` and `bowDeg` get it as well, for a third reason: they aim the shaft, and
-the clubhead sits a metre from the hand, so a few degrees of wrist overshoot is a
-large curl in the head's trace. `faceDeg` does not — it is monotone across the
-whole swing, so there is nothing to catch.
+The club's aim channels do NOT get it. They are interpolated on the torso-frame
+chart, whose path curves rather than turns, and the limiter's zero-tangent rule
+froze the club at P9 when it was tried — see *The club through the top*.
+`faceDeg` is monotone across the whole swing, so there is nothing to catch.
 
 **3. C1 joins on straightened segments.** A straightened segment is a line, so its
 curved neighbour has to *arrive along that line* or the straight-line rule buys a
@@ -564,10 +564,13 @@ needed a hidden sign bit to say which way the club leaned out of the screen.
 And it is **non-singular at zero hinge**, where the equivalent polar chart is not.
 That is not a fine point — it was a bug. Solving the defaults in
 `(hinge, azimuth)` gave azimuths that jumped by up to 270° between neighbouring
-keyframes, so the club spun through nonsense between checkpoints, purely because
-azimuth is ill-conditioned when the hinge is small, which at address and at
-release it is. In `(cock, bow)` those same keyframes are a few degrees apart and
-interpolate cleanly.
+keyframes, purely because azimuth is ill-conditioned when the hinge is small,
+which at address and at release it is.
+
+Note what the pair is and is not used for: it is how a keyframe's wrist is
+**stored and dragged** — a joint angle, against the bone above it. It is *not*
+how the club is interpolated between keyframes; that happens on the torso-frame
+chart instead, for reasons given under *The club through the top*.
 
 ### The panel: the club's aim, in the torso frame
 
@@ -623,21 +626,26 @@ is, not where the wrist is, so the wrist angles are back-solved from that:
 | | Definition used | Result |
 | --- | --- | --- |
 | P1 | shaft points at the ball | head **on** the ball, 0.9 cm |
-| P1.5 | shaft aimed at a **point** 65 cm back down the target line, 20 cm up | head clears the turf |
-| P2, P6 | *shaft parallel* — to the ground **and** the target line | shaft exactly (−1, 0, 0) |
-| P3 | 58° above horizontal, on plane — the club set at lead-arm-parallel | |
-| P4 | 45° above horizontal, on plane — **short of parallel** at the top | |
-| P5 | 25° above horizontal — shallowed, lag retained coming down | |
+| P1.5 | shaft aimed at a **point** 70 cm back down the target line, 15 cm up | head sweeps back low |
+| P2 | *shaft parallel* — to the ground **and** the target line | (−1, 0, 0); only 23° of hinge — Rory's late set |
+| P3 | 75° above horizontal, on plane — the set arriving | head at its backswing-high 2.25 m |
+| P4 | **12° short of parallel**, pointing at the target, a touch of lay-off | hinge 113° |
+| P5 | laid **back**, z = −0.45 — the shallowing move | hinge 139°, dynamic lag |
+| P6 | *shaft parallel*, still 7° inside | head approaches from behind the hands |
 | P7 | shaft points at the ball | |
 | P7.5 | released, in line with the lead arm | |
-| P8 | *follow-through shaft parallel* | shaft exactly (+1, 0, 0) |
-| P9, P10 | up past the lead shoulder, then folded back behind it | |
+| P8 | *follow-through shaft parallel* | (+1, 0, 0) |
+| P9, P10 | up past the lead shoulder, then folded back behind it | 171° of hinge at the finish |
 
-P1.5 is the one aimed at a *point* rather than at an elevation, and that is not a
-stylistic choice: address and takeaway are **125° apart in bearing** around the
-forearm, and the short way round the exponential map dips the hinge in between,
-which drove the head 5 cm under the turf halfway to P1.5. Aiming at a point on the
-ground keeps the bearing short and the head above it.
+Two of these are aimed at things rather than angles, and one is deliberately
+off plane. P1.5 aims at a *point* on the ground because address and takeaway are
+far apart in bearing around the forearm, and aiming an elevation let the
+interpolated hinge dip the head under the turf on the way. And P5 carries a
+**z component**, because the real transition move is not on the plane at all:
+the hands drop while the shaft falls onto a *flatter* plane behind them. Authored
+on plane, the interpolated head swept out toward the ball line while still high —
+an over-the-top move Rory does not make; laid back, it drops inside, which is
+the tour pattern the down-the-line view shows.
 
 `faceDeg` is solved to be **square** — face normal down the target line — at
 address and at impact, the only two moments where "square" is defined. Between
@@ -654,9 +662,9 @@ Independent checks the defaults were not tuned against:
 
 | | |
 | --- | --- |
-| Peak clubhead speed | **58.9 m/s, at t = 0.817** — impact, for the driver the defaults are solved at. Tour driver ~53–57, so this runs a little fast. |
-| Peak shaft rotation | 2763°/s, against a `headSpeed / length` ceiling of 3240°/s |
-| Clubhead below ground | **never**, for the driver, the long iron and the mid iron; ≤ 0.6 cm for the rest |
+| Peak clubhead speed | **53.4 m/s = 119 mph, at t = 0.819** — 11 ms after impact, for the driver the defaults are solved at. Rory's measured driver is ~122 mph. |
+| Peak shaft rotation | 2813°/s, against a `headSpeed / length` ceiling of ~3100°/s |
+| Clubhead below ground | **never — all six clubs** |
 | Face square at address / impact | −0.03° / −0.06° |
 | Handedness mirror | lefty matches `mirror(righty)` to **0.0 m** on hand, head, shaft, face, toe and crown at every sample |
 
@@ -688,71 +696,64 @@ should be lower — a change to the authored swing rather than to the club — s
 is left alone. The address position is pinned instead, because that is where a
 club's length is *defined*: you pick the club that reaches the ball at setup.
 
-### The club through the top
+### The club through the top, and how it is interpolated
 
-Three separate bugs put a tangle in the clubhead path here.
+The club's between-keyframe motion is interpolated on the **torso-frame direction
+chart** — the same chart the club-aim panel draws — not in wrist coordinates. See
+`SwingPath.aimChart`. This was the single biggest smoothness fix in the project,
+and the reason is worth stating plainly: (cock, bow) are joint angles measured
+against the lead forearm, and the forearm itself swings through an enormous arc.
+A shaft that moves smoothly through the world is a wildly oscillating curve in
+wrist space, so interpolating IN wrist space made the world shaft direction wave
+**across the swing plane fifteen times** in one swing — every keyframe was
+authored on plane, and all the waving happened between them. On the torso chart
+the same keyframes interpolate into one continuous sweep around the body, and the
+world motion is that composed with the (smooth, monotone) torso rotation.
+Keyframes still *store* (cock, bow) — the panel drags them, the address solver
+writes them — the chart track is derived and cached.
 
-**The shaft directions were off plane.** Every checkpoint the P-system names as
-parallel to the target line reads exactly that. The authored targets carried a
-sideways component of 0.15 to 0.41, so the club leaned across the swing plane and
-back again, and the head wandered sideways over the top. They are now all on
-plane: `z = 0`.
+The chart channels are interpolated **free**, without the overshoot limiter: the
+chart path never doubles back, so per-channel extrema are places where the path
+is curving, not turning, and the zero-tangent rule is exactly wrong there — it
+froze the club for ~30 ms at P9, a visible hitch, when it was tried.
 
-**The top was solved to keep the clubhead rising**, which stood the club on end —
-the shaft ran `(−0.05, +0.91, −0.41)` at P4, pointing at the sky and tipped toward
-the golfer's back, and stayed near vertical for the whole of `t = 0.36 … 0.73`.
-The top is now **short of parallel and on plane**: 45° above horizontal, pointing
-away from the target.
+With that in place the top reads like the real thing:
 
-**And both the hand path and the wrist overshot the top.** Those are in the
-interpolation, not the club, and they are what the clubhead trace was actually
-drawing. `bowDeg` turns at the top — 71° at P3, 27° at P4, 47° at P5 — and an
-unlimited cubic dips several degrees below that 27 and comes back. A few degrees
-of shaft wobble is a large curl a metre out at the head: measured across
-`t = 0.42 … 0.75`, the head's trace turned through **527°**, more than a full
-circle, which is exactly the extra loop it looked like. With `cockDeg` and
-`bowDeg` overshoot-limited it turns through **345°** and the curl is gone.
+| | P3 | P4 (top) | crossover apex t=0.69 | P5 |
+| --- | --- | --- | --- | --- |
+| Hand height | 1.23 m | 1.45 m | falling | 1.08 m |
+| Shaft elevation | 75° | **12°** | — | 43°, laid back |
+| Clubhead height | 2.25 m | 1.67 m | **2.08 m** | 1.80 m |
 
-With those fixed the shaft flattens steadily from the set to the delivery, and the
-clubhead's own high point lands *before* the top rather than at it, because the
-shaft is laying back faster than the hands are still rising. That is the
-shallowing move:
+The head **descends into the top** — at a near-parallel top the head hangs at
+head height, below its P3 peak — and then rises again through the transition as
+the wrists deepen while the hands drop, before plunging to the ball. That
+over-and-under is not a defect; it is the crossover loop every tracer video
+shows, and the down-the-line view now draws it as the classic figure: backswing
+up the outside, a narrow loop at the top, downswing dropping *inside*, the head
+approaching the ball from behind the hands.
 
-| | P3 | P4 (top) | P5 |
-| --- | --- | --- | --- |
-| Hand height | 1.12 m | 1.37 m | 1.05 m |
-| Shaft elevation | 58° | **45°** | 25° |
-| Clubhead height | 2.01 m | 2.12 m | 1.50 m |
-
-The clubhead's trace is now a single arc. Its height has exactly four turning
-points over the whole swing, which is the right number:
+Head-height turning points over the whole swing, all five of them real:
 
 | t | Clubhead height | |
 | --- | --- | --- |
-| 0.124 | 0.011 m | brushing the turf in the takeaway |
-| **0.483** | **2.265 m** | the high point, *before* the top |
-| 0.819 | 0.022 m | impact |
-| 0.888 | 2.352 m | the finish |
+| 0.481 | 2.42 m | backswing high point, before the top |
+| 0.608 | 1.67 m | the parallel top — a local **low** |
+| 0.693 | 2.08 m | crossover apex, the club still travelling |
+| 0.821 | 0.01 m | impact |
+| 0.913 | 2.37 m | over the shoulder, into the finish |
 
-The largest direction step on the head path through the whole of
-`t = 0.30 … 0.75` is **3.0°**.
+### One authored hand path, six clubs
 
-### And one the club change exposed
-
-**There is one authored hand path and six clubs**, and it is solved for the
-driver. Going down to the wedge shortens the club by 26 cm while the address only
-lowers the hands by 9 cm, so the shorter clubs both fall short of the ball at
-impact (above) and, on three of the six, brush **below ground** by up to 0.6 cm
-just after the strike. The driver, the long iron and the mid iron never do.
-
-That is far better than it was — the wood and driver used to dive 6.8 cm and
-11.1 cm below ground, because the defaults were solved for the mid iron and the
-error ran the other way — but the underlying limitation has not moved. A real
-driver swing is not the iron swing with a longer club; it is wider and shallower,
-with the low point behind a teed ball, and the model has no way to say that while
-the hand path is shared. The honest fixes are both bigger than a constant: author
-a hand path per club, or make the path's radius scale with club length. Neither is
-a tuning change, so the dip is reported rather than papered over.
+The hand path is solved for the **driver**. The other clubs ride the same track
+with their own lengths and addresses, and the cost is at impact: the wedge's head
+falls 23.7 cm short of the ball (see above). No club ever digs below ground —
+that used to be the wood and driver's failure mode by 7–11 cm when the defaults
+were solved for the mid iron. A real wedge swing is not the driver swing with a
+shorter club, and the model has no way to say so while the hand path is shared;
+the honest fixes — a path per club, or a radius that scales with club length —
+are both bigger than a constant, so the shortfall is reported rather than papered
+over.
 
 ### Mounting the head
 

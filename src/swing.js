@@ -4,11 +4,13 @@
  * from the rectangle is not authored -- it is solved from the arm rules, see
  * `axisDistanceFor` in arm.js.
  *
- * The reference values approximate Rory McIlroy's sequencing -- ~93 degrees of
- * shoulder turn at the top, a deep transition where the hands drop while the
- * torso is already unwinding, and long extension through impact. They are
- * hand-authored from published swing positions, not motion capture, so treat
- * them as a well-shaped starting point that you tune by dragging.
+ * The reference values model Rory McIlroy's DRIVER swing, from his published
+ * GEARS capture numbers: ~116 degrees of shoulder turn at the top (110 in this
+ * single-axis torso), a late wrist set, a transition where the shaft lays back
+ * as the hands drop, and a peak clubhead speed that lands on his measured
+ * 122 mph. They are authored from published measurements and checkpoints, not
+ * motion capture, so treat them as a well-shaped starting point you tune by
+ * dragging.
  *
  * THE ARM RULES
  *   t <= RELEASE_T   the lead arm is straight (all folding is at the trail elbow)
@@ -18,10 +20,11 @@
  * Impact is NOT where the trail arm straightens -- it is still extending through
  * impact and only reaches full length at release.
  *
- * THE CLUB. Every shaft direction the P-system names as parallel to the target line
- * is authored ON PLANE, with no sideways component. Authoring those with a
- * sideways lean of 0.15 to 0.41 was what had the club wandering across itself at
- * the top.
+ * THE CLUB. Checkpoints the P-system names as parallel to the target line (P2,
+ * P6, P8) are authored ON PLANE; the top and the transition carry a deliberate
+ * lay-off/lay-back z component, because that is the shallowing move -- see the
+ * keyframe notes. Every direction is authored in WORLD space and back-solved to
+ * wrist angles; nothing here is a hand-picked (cock, bow) pair.
  *
  * THE PATH SHAPE is a narrow V in the torso frame, which is what a hand path
  * really looks like once the body's own rotation is taken out of it:
@@ -40,7 +43,7 @@
  * not a hand-picked pair of angles. See the club section of the README.
  */
 
-import { rad, sub } from './vec3.js';
+import { rad, deg, sub, dot, clamp } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { naturalAddress, axisDistanceFor } from './arm.js';
 import { ballPosition } from './rig.js';
@@ -80,14 +83,14 @@ export function releaseBlendAt(t) {
 }
 
 /**
- * The P-system, with shoulder rotation synced to a tour long-iron swing.
+ * The P-system, with shoulder rotation synced to Rory's driver capture.
  *
  * Fields: t, torso angle (deg, + = turned away from target), hand u, hand v.
  *
- * SHOULDER ROTATION. The definitions of P4, P6, P9 and P10 are themselves stated
- * in terms of shoulder turn, so those four are pinned exactly: +90 at the top,
- * neutral at delivery, -90 square to the target, -120 at the finish. The rest are
- * interpolated to match long-iron sequencing.
+ * SHOULDER ROTATION. GEARS puts Rory's driver turn at ~116 degrees of shoulders
+ * over ~42 of hips; this torso is a single rigid rotation, so it carries 110 --
+ * between the two, weighted to the shoulder line the model actually pins. P3 is
+ * at 90 (his lead-arm-parallel point), impact is -35 open, the finish -120.
  *
  * TIMING. The P times are NOT authored -- they are solved from a torso
  * angular-velocity profile, because the angles alone say nothing about how fast
@@ -95,13 +98,13 @@ export function releaseBlendAt(t) {
  * top, the finish) joined by smooth ramps, with the downswing peak 40 ms before
  * impact, as the thorax leads the club in the kinematic sequence:
  *
- *     backswing   w = A sin^2(pi t / T_back)        peak  240 deg/s
- *     post-top    ramp up to the peak, then down     peak  867 deg/s
+ *     backswing   w = A sin^2(pi t / T_back)        peak  293 deg/s
+ *     post-top    ramp up to the peak, then down     peak measured ~1100 deg/s
  *
- * Constraints: +90 at the top, -35 at impact, -120 at the finish, and impact on
- * the 3:1 mark. Those four fix everything else, including the total duration of
- * 1.235 s -- see the README for the derivation and for why the peak comes out
- * where it does.
+ * Constraints: +110 at the top, -35 at impact, -120 at the finish, impact on
+ * the 3:1 mark, 1.235 s total. The backswing keyframe times below (0.2149,
+ * 0.3316, 0.4106) are the inverse of that sin^2 profile at 25, 65 and 90
+ * degrees.
  *
  * HAND PATH. u is <= 0 up to release and >= 0 after, hitting exactly 0 at
  * release. That is not a stylistic choice -- `freeArmULimit` shows the rules
@@ -109,52 +112,45 @@ export function releaseBlendAt(t) {
  */
 export const REFERENCE_KEYFRAMES = [
   // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
-  // both arms stay equally straight through it: a one-piece takeaway. The line is
-  // exact and needs no special case: u is flat on both sides of P1.5, so the
-  // overshoot limiter takes the tangent there to zero and the cubic for u is
-  // identically zero across the whole segment.
-  //
-  // The club is not aimed at an ELEVATION here but at a point on the ground, 65 cm
-  // back down the target line. Aiming an elevation drove the head 5 cm under the
-  // turf halfway to P1.5: address and takeaway are 125 degrees apart in bearing
-  // around the forearm, and the short way round dips the hinge in between.
-  { t: 0.0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 19.9, bowDeg: 24.5, faceDeg: 0.0, label: 'P1 address' },
-  { t: 0.2213, thetaDeg: 22, u: 0.0, v: -0.3651, cockDeg: 15.6, bowDeg: 17.8, faceDeg: -3.4, label: 'P1.5 takeaway' },
-  // Backswing -- up and across, with the club setting from parallel to the ground
-  // at P2 to 58 degrees above it at P3.
-  { t: 0.2868, thetaDeg: 40, u: -0.0658, v: -0.23, cockDeg: -21.7, bowDeg: 28.4, faceDeg: -4.5, label: 'P2 shaft parallel' },
-  { t: 0.3556, thetaDeg: 60, u: -0.1273, v: -0.1393, cockDeg: 6.2, bowDeg: 71.3, faceDeg: -5.5, label: 'P3 lead arm parallel' },
-  // The top. The hands reach their extreme in BOTH u and v here -- the point of
-  // the V in the 2D panel. u lands on it exactly, because u is overshoot-limited;
-  // v floats 2.1 cm past and comes back, which is the transition float and is what
-  // keeps the hand from stopping dead as it turns.
-  //
-  // The club is SHORT OF PARALLEL and ON PLANE: 45 degrees above horizontal,
-  // pointing away from the target, with no sideways component. Not vertical -- an
-  // earlier version solved the top to keep the clubhead rising, which stood the
-  // club on end and left it pointing at the sky.
-  //
-  // The clubhead's own high point is at t = 0.47, before the top rather than at
-  // it, because the shaft is already flattening (58 degrees at P3, 45 here, 25 at
-  // P5) faster than the hands are still rising. That is the shallowing move, and
-  // it is what keeps the head's trace a single arc instead of the loop it used to
-  // draw here.
-  { t: 0.6075, thetaDeg: 90, u: -0.2025, v: -0.0285, cockDeg: 34.1, bowDeg: 27.4, faceDeg: -9.4, label: 'P4 top, shoulders 90° away' },
-  // Downswing -- inside the backswing, and much straighter than it: P5, P6, P7 and
-  // release are very nearly collinear in the (u, v) plane.
-  { t: 0.7317, thetaDeg: 45, u: -0.1665, v: -0.1875, cockDeg: -0.9, bowDeg: 47.4, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.7767, thetaDeg: 0, u: -0.0788, v: -0.3578, cockDeg: -61.8, bowDeg: 33.7, faceDeg: -12.1, label: 'P6 delivery, shaft parallel, square' },
+  // both arms stay equally straight through it: a one-piece takeaway. The club
+  // is aimed at a POINT on the ground, 70 cm back down the target line, rather
+  // than at an elevation: address and takeaway are far apart in bearing around
+  // the forearm, and aiming an elevation let the interpolated hinge dip the
+  // head under the turf on the way.
+  { t: 0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 19.9, bowDeg: 24.5, faceDeg: 0, label: 'P1 address' },
+  { t: 0.2149, thetaDeg: 25, u: 0.0, v: -0.3651, cockDeg: 17.7, bowDeg: 16.3, faceDeg: -3.3, label: 'P1.5 takeaway' },
+  // Backswing. Rory sets the club LATE for the driver: barely 23 degrees of
+  // hinge at P2, the full set only arriving with P3. The times are solved from
+  // the sin^2 rate profile -- see the tempo notes -- so the torso rests at
+  // address and accelerates smoothly through the turn.
+  { t: 0.3316, thetaDeg: 65, u: -0.0658, v: -0.23, cockDeg: 3.1, bowDeg: 22.5, faceDeg: -5.2, label: 'P2 shaft parallel' },
+  { t: 0.4106, thetaDeg: 90, u: -0.1273, v: -0.1393, cockDeg: 14.7, bowDeg: 76.6, faceDeg: -6.4, label: 'P3 lead arm parallel' },
+  // The top. GEARS measures Rory's driver shoulder turn at ~116 degrees; the
+  // single-axis torso here carries 110 of it. The shaft is just SHORT OF
+  // PARALLEL, pointing at the target with 12 degrees of elevation and a touch
+  // of lay-off. The clubhead's own apex comes ~50 ms later, between here and
+  // P5 -- the crossover loop -- because the wrists keep deepening while the
+  // hands have already turned back down.
+  { t: 0.6075, thetaDeg: 110, u: -0.2025, v: -0.0285, cockDeg: -80.9, bowDeg: 78.9, faceDeg: -9.4, label: 'P4 top, shoulders 110° away' },
+  // Transition. The shaft LAYS BACK as the hands drop -- the z component is the
+  // shallowing move, the club falling to a flatter plane behind the hands --
+  // and the hinge deepens to 139 degrees, dynamic lag beyond the top's 113.
+  // On-plane targets here (z = 0) read as over-the-top: the head swept out
+  // toward the ball line while still high, which no tour swing does.
+  { t: 0.7317, thetaDeg: 55, u: -0.1665, v: -0.1875, cockDeg: -93.1, bowDeg: 102.8, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
+  // Delivery: shaft parallel to the ground again, still tipped 7 degrees
+  // inside; the head approaches the ball from behind the hands.
+  { t: 0.7767, thetaDeg: 5, u: -0.0788, v: -0.3578, cockDeg: -63.2, bowDeg: 29.8, faceDeg: -12.1, label: 'P6 delivery, shaft parallel' },
   { t: 0.81, thetaDeg: -35, u: -0.045, v: -0.3812, cockDeg: -16.6, bowDeg: 6.6, faceDeg: -12.6, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
   { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.4009, cockDeg: 18.7, bowDeg: -15.5, faceDeg: -12.9, label: 'P7.5 release, both arms straight' },
-  // Follow-through -- out to the lead side and up, shallower than the backswing.
-  { t: 0.8505, thetaDeg: -72, u: 0.0219, v: -0.322, cockDeg: 28.8, bowDeg: 17.8, faceDeg: -13.2, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.8756, thetaDeg: -90, u: 0.0618, v: -0.2624, cockDeg: 10.2, bowDeg: 67.5, faceDeg: -13.6, label: 'P9 shoulders 90° to target' },
-  // The finish folds the club right back over the shoulder: 171 degrees of hinge
-  // away from the forearm. It used to be capped at 82, because the old wrist chart
-  // was a hemisphere and could not show more; the torso-frame chart holds the
-  // whole sphere, so the cap is gone and the finish is the real one.
-  { t: 1.0, thetaDeg: -120, u: 0.1912, v: -0.0014, cockDeg: 71.2, bowDeg: 155.5, faceDeg: -15.5, label: 'P10 finish, shoulders 120°' },
+  // Follow-through -- the mirror checkpoints of the backswing.
+  { t: 0.853, thetaDeg: -72, u: 0.0219, v: -0.322, cockDeg: 29, bowDeg: 17.5, faceDeg: -13.3, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.892, thetaDeg: -94, u: 0.0618, v: -0.2624, cockDeg: 7.2, bowDeg: 75.7, faceDeg: -13.9, label: 'P9 shoulders 90° to target' },
+  // The finish folds the club right back over the shoulder: 171 degrees of
+  // hinge away from the forearm. The torso-frame chart holds the whole sphere,
+  // so nothing caps it.
+  { t: 1, thetaDeg: -120, u: 0.1912, v: -0.0014, cockDeg: 71.2, bowDeg: 155.5, faceDeg: -15.5, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -354,6 +350,57 @@ export class SwingPath {
     return best;
   }
 
+  /**
+   * The club-aim track: each keyframe's shaft direction as a point on the
+   * TORSO-FRAME direction chart -- the same chart the club-aim panel draws.
+   *
+   *   phi      angle away from straight down the spine axis, degrees
+   *   bearing  which way round the body, from `side` toward `fwd`
+   *   (a, b) = phi * (cos bearing, sin bearing)     the exponential map
+   *
+   * This exists because of what happened when the club was interpolated in
+   * WRIST coordinates instead. (cock, bow) are joint angles against the lead
+   * forearm, and the forearm itself swings through a huge arc -- so a shaft
+   * direction that moves smoothly through the world is a wildly oscillating
+   * curve in wrist space, and vice versa: smooth wrist curves composed with the
+   * swinging forearm made the world shaft direction WAVE ACROSS THE SWING PLANE
+   * fifteen times in one swing. Every keyframe was authored on plane; all the
+   * waving happened between them. Interpolating on this chart instead makes the
+   * club's motion smooth in the torso frame by construction, and the world
+   * motion is that composed with the (smooth, monotone) torso rotation.
+   *
+   * The chart is non-singular everywhere except straight UP the spine axis
+   * (phi = 180), which no part of the swing approaches within 25 degrees.
+   * Keyframes still STORE (cock, bow) -- the club-aim panel drags them, and the
+   * address solver writes them -- so this track is derived, cached against the
+   * revision counter, and reproduces every stored keyframe exactly at its knot.
+   */
+  aimChart() {
+    if (this.chartRev === this.revision && this.chart) return this.chart;
+    this.chartRev = this.revision;
+    this.chart = this.keys.map((k) => {
+      // The keyframe's own pose, from stored values alone -- no interpolation,
+      // so this cannot recurse back into sample().
+      const pose = solvePose({
+        theta: rad(k.thetaDeg),
+        u: k.u,
+        v: k.v,
+        constraint: constraintAt(k.t),
+        blend: releaseBlendAt(k.t),
+        wrist: k,
+      });
+      const d = pose.club.shaftDir;
+      const s = dot(d, pose.basis.side);
+      const up = dot(d, pose.basis.up);
+      const f = dot(d, pose.basis.fwd);
+      const phi = deg(Math.acos(clamp(-up, -1, 1)));
+      const flat = Math.hypot(s, f);
+      if (flat < 1e-9) return { a: 0, b: 0 };
+      return { a: (phi * s) / flat, b: (phi * f) / flat };
+    });
+    return this.chart;
+  }
+
   /** Straight-line length of segment `i` in the (u, v) plane, in metres. */
   segmentLength(i) {
     const a = this.keys[i];
@@ -384,21 +431,24 @@ export class SwingPath {
       index >= 0 && index < keys.length - 1 && this.isStraightSegment(index);
 
     /**
-     * The wrist channels. `cockDeg` and `bowDeg` are overshoot-limited for the
-     * same reason `u` is, one level further out: an overshoot in the wrist is a
-     * wobble of the SHAFT, and the clubhead sits a metre from the hand, so a few
-     * degrees of it draws a large curl in the head's trace. `bowDeg` turns at the
-     * top (71 -> 27 -> 47), and unlimited the cubic dipped several degrees below
-     * that 27 and came back: measured over the top, the head's trace turned
-     * through 527 degrees -- more than a full circle, which is exactly the extra
-     * loop it looked like -- against 345 with the limiter.
+     * The club's aim, interpolated on the torso-frame chart -- see `aimChart`
+     * for why NOT in wrist coordinates. FREE curves, deliberately: the chart
+     * path never doubles back on itself -- the club sweeps continuously round
+     * the body -- so per-channel extrema are places where the path is CURVING,
+     * not turning, and the Fritsch-Carlson limiter's zero-tangent rule is
+     * exactly wrong there. Applied here it froze the club dead for ~30 ms at
+     * P9, where both channels happen to peak together: a visible hitch in the
+     * follow-through, with the clubhead momentarily at 9 m/s between two
+     * 40 m/s neighbours. (The overshoot the limiter would guard against was
+     * real once, but it was the transition targets' fault -- authored on plane
+     * when the real move lays the shaft back INSIDE the plane -- and fixing
+     * the targets removed it; see the P5 keyframe note.)
      *
-     * `faceDeg` is left free. It is monotone across the whole swing, so there is
-     * nothing for a limiter to catch, and the roll should not be made to pause at
-     * a keyframe.
+     * `faceDeg` is a plain free curve too: it is monotone across the whole
+     * swing, so there is nothing for a limiter to catch.
      */
-    const curve = (name) =>
-      hermite(keys, i, localT, span, (k) => k[name], name !== 'faceDeg');
+    const chart = this.aimChart();
+    const curve = (get) => hermite(keys, i, localT, span, get, false);
     /**
      * The hand track. `u` is overshoot-limited and `v` is not -- see `tangent` --
      * and this is the only track the straight-segment rule applies to. Letting
@@ -422,10 +472,13 @@ export class SwingPath {
       v: hand('v'),
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
+      /** Torso-chart club aim; `solvePose` turns it back into wrist angles. */
+      aim: {
+        a: curve((k) => chart[keys.indexOf(k)].a),
+        b: curve((k) => chart[keys.indexOf(k)].b),
+      },
       wrist: {
-        cockDeg: curve('cockDeg'),
-        bowDeg: curve('bowDeg'),
-        faceDeg: curve('faceDeg'),
+        faceDeg: curve((k) => k.faceDeg),
       },
     };
   }
