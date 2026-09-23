@@ -135,7 +135,10 @@ export class WristView {
   /** Inverse: a point's horizontal position back to a torso-frame direction. */
   chartToDirection(p) {
     const H = getRig().H;
-    const r = Math.min(Math.hypot(p.x, p.z), CHART_R);
+    // Held just inside the rim. The rim itself is straight UP the spine axis,
+    // where bearing means nothing: a drag that reached it snapped the club to a
+    // single degenerate direction and its marker to the centre of the chart.
+    const r = Math.min(Math.hypot(p.x, p.z), CHART_R * (178 / MAX_PHI));
     const phi = rad((r / CHART_R) * MAX_PHI);
     const u = -Math.cos(phi);
     const flat = Math.hypot(p.x, p.z);
@@ -579,7 +582,12 @@ export class WristView {
       const t = i / n;
       const p = this.pointFor(this.swing.poseAt(t));
       const id = phaseAt(t).id;
-      if (prev) (byPhase[id] ??= []).push(prev.clone(), p.clone());
+      // The chart is cut open at the rim -- straight up the spine axis -- so a
+      // club passing near straight up jumps from one side of the disc to the
+      // other between two samples. Drawing that jump put a long false chord
+      // straight across the chart; skip it instead.
+      const jump = prev && Math.hypot(p.x - prev.x, p.z - prev.z) > 0.5 * CHART_R;
+      if (prev && !jump) (byPhase[id] ??= []).push(prev.clone(), p.clone());
       prev = p;
     }
     for (const [id, pts] of Object.entries(byPhase)) {

@@ -158,21 +158,23 @@ the **driver**, and the club owns the address: its spine angle, its length, and
 where the ball sits.
 
 **The hand does not move.** P1 sits at the same `(u, v)` on the rectangle for
-every club — `u = 0.0, v = −46.7 cm` — so changing club never touches a keyframe
-and the authored swing is untouched. The anchor is where the arms hang plumb at
-the **wedge**, and everything else follows from the torso frame rotating
-underneath it: pick a longer club, the spine stands up, and the hands rise and
-move *forward*, from plumb at the wedge to 15.8 cm ahead of plumb at the driver.
-The ball is what moves.
+every club — `u = 0.0, v = −34.8 cm` — so changing club never touches a keyframe
+and the authored swing is untouched. That point comes from the hand-tuned
+reference swing: it is level with the release and impact hands, so a club that
+reaches the ball at address can reach it again coming through. (It used to be
+where the arms hang plumb at the wedge, `v = −46.7 cm`, which put the impact hand
+8 cm above the address hand on every club.) Everything else follows from the
+torso frame rotating underneath it: pick a longer club, the spine stands up, and
+the hands rise and move forward. The ball is what moves.
 
-| Club | Length | Lie | Spine tilt | Hand height | Hands ahead of plumb | Ball from axis |
-| --- | --- | --- | --- | --- | --- | --- |
-| Wedge | 35.25″ | 64.5° | 40° | 0.707 m | 0.0 cm | 0.727 m |
-| Short iron | 36.0″ | 64.0° | 38° | 0.718 m | +2.1 cm | 0.752 m |
-| Mid iron | 37.0″ | 62.5° | 35° | 0.736 m | +5.3 cm | 0.783 m |
-| Long iron | 38.5″ | 61.0° | 32° | 0.754 m | +8.5 cm | 0.836 m |
-| Fairway wood | 43.0″ | 56.5° | 28° | 0.778 m | +12.7 cm | 1.004 m |
-| Driver | 45.5″ | 56.0° | 25° | 0.797 m | +15.8 cm | 1.121 m |
+| Club | Length | Lie | Spine tilt | Hand height | Ball from axis |
+| --- | --- | --- | --- | --- | --- |
+| Wedge | 35.25″ | 64.5° | 40° | 0.728 m | 0.845 m |
+| Short iron | 36.0″ | 64.0° | 38° | 0.745 m | 0.863 m |
+| Mid iron | 37.0″ | 62.5° | 35° | 0.770 m | 0.878 m |
+| Long iron | 38.5″ | 61.0° | 32° | 0.797 m | 0.916 m |
+| Fairway wood | 43.0″ | 56.5° | 28° | 0.832 m | 1.080 m |
+| Driver | 45.5″ | 56.0° | 25° | 0.859 m | 1.187 m |
 
 Lengths and lies are **standard men's specs**. Rory plays standard length, so
 these are his lengths; his own lie tolerances are not public. The spine tilts come
@@ -181,8 +183,8 @@ column here that is a range rather than a spec, because per-club spine angle is
 not something his team has released.
 
 `ballForward` is **solved**: given the fixed address hand and the club's length,
-it is where the head reaches the ground. Measured, all six clubs sole within
-**0.9 cm** of the ball at address, with the face square to within 3.5°.
+it is the point on the club's ball line exactly one club-reach from the address
+hand. Measured, all six clubs sit on the ball at address to within 0.1 mm.
 
 #### What had to give
 
@@ -197,8 +199,8 @@ from the club gave the driver a 12.9° spine angle — nobody addresses a driver
 that upright. Re-hanging the arms plumb at *every* club fixed that, but then P1
 moved several centimetres between clubs, which meant translating the whole
 authored path to follow it, which in turn tore the takeaway off its own start:
-660 of 4000 samples ended up outside the free-arm limit. Holding the anchor at
-the wedge and moving the ball instead has neither problem.
+660 of 4000 samples ended up outside the free-arm limit. Holding one anchor
+for every club and moving the ball instead has neither problem.
 
 ### The arm rules
 
@@ -306,18 +308,18 @@ the model actually pins.
 
 | | Position | t | time | shoulders | u (cm) | v (cm) | axis dist (cm) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| P1 | address | 0.0000 | 0.000 s | 0° | **0.0** | −46.7 | 39.2 |
-| P1.5 | takeaway | 0.2149 | 0.265 s | +25° | **0.0** | −36.5 | 48.8 |
-| P2 | shaft parallel | 0.3316 | 0.410 s | +65° | −6.6 | −23.0 | 53.8 |
-| P3 | lead arm parallel, shoulders 90° | 0.4106 | 0.507 s | +90° | −12.7 | −13.9 | 53.6 |
-| P4 | top of backswing | 0.6075 | 0.750 s | **+110°** | −20.3 | −2.9 | 50.2 |
-| P5 | early downswing, lead arm parallel | 0.7317 | 0.904 s | +55° | −16.7 | −18.8 | 49.5 |
-| P6 | delivery, shaft parallel | 0.7830 | 0.967 s | 0° | −7.9 | −35.8 | 45.5 |
-| P7 | impact | 0.8100 | 1.000 s | **−35°** | −4.5 | −38.1 | 45.6 |
-| P7.5 | release, both arms straight | 0.8307 | 1.026 s | −55° | **0.0** | −40.1 | 45.9 |
-| P8 | follow-through, shaft parallel | 0.8530 | 1.053 s | −72° | +2.2 | −32.2 | 50.9 |
-| P9 | shoulders square to target | 0.8920 | 1.102 s | −94° | +6.2 | −26.2 | 52.4 |
-| P10 | finish | 1.0000 | 1.235 s | **−120°** | +19.1 | −0.1 | 51.1 |
+| P1 | address | 0.0000 | 0.000 s | 0° | **0.0** | −34.8 | 50.0 |
+| P1.5 | takeaway | 0.2149 | 0.265 s | +25° | **0.0** | −31.7 | 52.0 |
+| P2 | shaft parallel | 0.3316 | 0.410 s | +65° | −1.0 | −14.6 | 58.8 |
+| P3 | lead arm parallel, shoulders 90° | 0.4106 | 0.507 s | +90° | −5.9 | −3.7 | 58.7 |
+| P4 | top of backswing | 0.6075 | 0.750 s | **+110°** | −25.2 | +2.7 | 45.9 |
+| P5 | early downswing, lead arm parallel | 0.7317 | 0.904 s | +55° | −29.3 | −12.2 | 39.8 |
+| P6 | delivery, shaft parallel | 0.7830 | 0.967 s | 0° | −19.2 | −29.2 | 42.0 |
+| P7 | impact | 0.8100 | 1.000 s | **−35°** | −10.3 | −33.6 | 45.8 |
+| P7.5 | release, both arms straight | 0.8307 | 1.026 s | −55° | **0.0** | −34.8 | 50.0 |
+| P8 | follow-through, shaft parallel | 0.8530 | 1.053 s | −72° | +7.9 | −28.4 | 50.5 |
+| P9 | shoulders square to target | 0.8920 | 1.102 s | −94° | +17.6 | −16.7 | 49.6 |
+| P10 | finish | 1.0000 | 1.235 s | **−120°** | +28.1 | +4.6 | 42.7 |
 
 The three bold angles are the measured anchors — 110 at the top, 35 open at
 impact, 120 at the finish. P3 sits at 90 because that is where GEARS puts Rory's
@@ -501,10 +503,25 @@ golfer standing still. The angle is always interpolated as a curve.
 | H, or the handedness button | Flip right- / left-handed |
 | club slider | Six clubs, wedge to driver. Sets the spine tilt, the club length and the ball position together; P1 itself never moves. Defaults to **driver**. |
 | Drag / scroll on 3D | Orbit / zoom |
+| Copy swing | Puts the exact keyframes on the clipboard as JSON. |
+| Load swing | Pastes that JSON back — in this browser or any other. |
+| Reset swing | Back to the defaults, and forgets the saved swing. |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference
 hand position. Dragging rewrites a keyframe's hand position; it never changes its
 time or torso angle.
+
+### Saving and sharing a swing
+
+Every edit made by dragging is **saved in the browser** and restored on reload,
+so a tuned swing no longer lives only in the open tab. Only edits are saved —
+never the defaults — so a saved swing cannot mask a newer set of defaults you
+have not touched. *Reset swing* forgets it.
+
+To hand a swing on — to someone else, or to become the new defaults — use
+**Copy swing** and paste the JSON. It is the stored values themselves, to four
+decimal places, rather than anything read back off the screen. The same data is
+at `golf.swing.snapshot()` in the browser console.
 
 ## Layout
 
@@ -666,9 +683,9 @@ Independent checks the defaults were not tuned against:
 
 | | |
 | --- | --- |
-| Peak clubhead speed | **55.5 m/s = 124 mph at t = 0.799**, 50.7 m/s through impact — Rory's measured driver is ~122 mph. |
+| Peak clubhead speed | **74.1 m/s at t = 0.801** with the hand-tuned defaults — well above Rory's measured ~122 mph (54.5 m/s). The P6 → P7 aim change is 64° in 33 ms. |
 | Peak shaft rotation | ~2 700°/s, held nearly flat from delivery through impact, decaying after — the real release shape |
-| Shaft off the delivery plane, t 0.66 → release | **≤ 1.5°** |
+| Shaft off the 50° delivery plane, t 0.66 → release | 17° with the hand-tuned defaults (≤ 1.5° with the solved ones — see below) |
 | Clubhead below ground | **never — all six clubs** |
 | Face square at address / impact | −0.03° / −0.06° |
 | Handedness mirror | lefty matches `mirror(righty)` to **0.0 m** on hand, head, shaft, face, toe and crown at every sample |
@@ -676,30 +693,23 @@ Independent checks the defaults were not tuned against:
 ### One thing the club does not fix
 
 **At impact the clubhead falls short of the ball**, and the readout says so rather
-than hiding it. How short depends entirely on the club:
+than hiding it:
 
 | Club | Head → ball, address | Head → ball, impact |
 | --- | --- | --- |
-| Wedge | 0.2 cm | 23.7 cm |
-| Short iron | 0.0 cm | 21.6 cm |
-| Mid iron | 0.0 cm | 19.2 cm |
-| Long iron | 0.1 cm | 16.8 cm |
-| Fairway wood | 0.3 cm | 10.1 cm |
-| **Driver** | 0.9 cm | **5.1 cm** |
+| Wedge | 0.0 cm | 17.8 cm |
+| Short iron | 0.0 cm | 17.8 cm |
+| Mid iron | 0.0 cm | 20.2 cm |
+| Long iron | 0.0 cm | 22.7 cm |
+| Fairway wood | 0.0 cm | 21.1 cm |
+| **Driver** | 0.0 cm | **22.4 cm** |
 
-This is a real inconsistency the club *exposed* in the hand path, not one it
-introduced: the authored impact hand is higher than the address hand, so no rigid
-club can touch a fixed ball at both. It is not fixable by moving things around,
-and that was checked rather than assumed — no position for P7 within ±30 cm
-satisfies the constraint, and solving for a ball both hands can reach pushes it
-98 cm away from the golfer and still leaves a residual.
-
-The gradient down the table is the same "one hand path, six clubs" limitation as
-below: the defaults are solved for the **driver**, so the driver is nearly right
-and the wedge is the furthest off. Closing it means deciding the impact hand
-should be lower — a change to the authored swing rather than to the club — so it
-is left alone. The address position is pinned instead, because that is where a
-club's length is *defined*: you pick the club that reaches the ball at setup.
+With the reference swing as tuned, two things add up to that. The impact hand
+sits 7 cm further from the ball than the club is long — on its own that caps how
+close any aim could get — and the impact shaft points 11° above the line to the
+ball. The first is a property of the hand path, the second of the P7 aim; both
+are the authored swing, so they are reported rather than silently corrected. Aim
+P7 at the ball on the club-aim chart and the gap closes to the first term.
 
 ### The delivery plane, and how the club is interpolated
 
@@ -738,23 +748,29 @@ finish (the golfer is at rest). Keyframes still *store* (cock, bow) — the pane
 drags them, the address solver writes them — the direction track is derived and
 cached.
 
-With that in place the top reads like the real thing:
-
-| | P3 | P4 (top) | P5 |
-| --- | --- | --- | --- |
-| Hand height | 1.23 m | 1.45 m | 1.08 m |
-| Shaft elevation | 75° | **12°** | 43°, laid back into the plane |
-| Clubhead height | 2.25 m | 1.67 m | 1.72 m |
-
-Head-height turning points over the whole swing, all five of them real:
+**The current defaults are hand-tuned, not solved.** The delivery-plane solve
+above produced the previous defaults; the reference swing is now the one tuned
+by dragging on the two panels, transcribed as it stands. It does not hold the
+50° delivery plane — the downswing shaft wanders up to 17° off it — and it is
+not re-solved onto it, because that would overwrite the tuning. Its clubhead
+trace is a single clean arc, with exactly three height turning points:
 
 | t | Clubhead height | |
 | --- | --- | --- |
-| 0.441 | 2.34 m | backswing high point, before the top |
-| 0.684 | 1.39 m | just past the parallel top — a local **low** |
-| 0.745 | 1.80 m | crossover apex, the club still travelling |
-| 0.810 | 0.09 m | impact |
-| 0.904 | 2.35 m | over the shoulder, into the finish |
+| 0.485 | 2.40 m | backswing high point, before the top |
+| 0.811 | 0.23 m | the low point — impact, 23 cm above the turf |
+| 0.927 | 2.09 m | into the finish |
+
+### Straight runs on the club-aim chart
+
+Where two neighbouring keyframes aim the club almost the same way *relative to
+the body*, the spline between them is the wrong tool: its tangents come from the
+neighbours further out, and P4 → P5 → P6 — 8° and 13° apart, between neighbours
+80° and 64° away — swung out in a wide arc and back. Those runs are now straight
+lines on the chart: the club holds its set relative to the torso and simply turns
+with it. `CURVE.aimStraightBelowDeg` (15°) picks them out, and the curves either
+side meet each straight run at its own measured velocity, so the joins have no
+kink.
 
 ### One authored hand path, six clubs
 

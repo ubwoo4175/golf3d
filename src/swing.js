@@ -4,13 +4,10 @@
  * from the rectangle is not authored -- it is solved from the arm rules, see
  * `axisDistanceFor` in arm.js.
  *
- * The reference values model Rory McIlroy's DRIVER swing, from his published
- * GEARS capture numbers: ~116 degrees of shoulder turn at the top (110 in this
- * single-axis torso), a late wrist set, a transition where the shaft lays back
- * as the hands drop, and a peak clubhead speed that lands on his measured
- * 122 mph. They are authored from published measurements and checkpoints, not
- * motion capture, so treat them as a well-shaped starting point you tune by
- * dragging.
+ * The torso track models Rory McIlroy's DRIVER swing, from his published GEARS
+ * capture numbers: ~116 degrees of shoulder turn at the top (110 in this
+ * single-axis torso) on a solved 3:1 tempo. The hand and club positions on top of
+ * it are hand-tuned by dragging.
  *
  * THE ARM RULES
  *   t <= RELEASE_T   the lead arm is straight (all folding is at the trail elbow)
@@ -26,28 +23,20 @@
  * keyframe notes. Every direction is authored in WORLD space and back-solved to
  * wrist angles; nothing here is a hand-picked (cock, bow) pair.
  *
- * THE PATH SHAPE is a narrow V in the torso frame, which is what a hand path
- * really looks like once the body's own rotation is taken out of it:
+ * THE PATH SHAPE, in the torso frame: the takeaway rises straight up the sternum
+ * line (u = 0), the backswing swings out to the trail side and over the shoulder
+ * line at the top, and the downswing drops back down OUTSIDE it, a loop that
+ * closes at release -- then the follow-through climbs out to the lead side.
  *
- *   takeaway         a straight vertical line: u holds at 0 while v rises
- *   backswing        up and across to the trail side, reaching its extreme in
- *                    BOTH u and v at the top, where the hand turns
- *   downswing        back down inside the backswing, and much straighter: from
- *                    delivery to release it is very nearly a line
- *   follow-through   out to the lead side and up, the mirror of the backswing but
- *                    shallower, finishing level with the lead shoulder
- *
- * The reference numbers come from a hand-tuned pass over this app's own 2D panel
- * rather than from a solver, and the wrist track is then SOLVED against them --
- * every shaft direction below is a checkpoint aimed in world space and converted,
- * not a hand-picked pair of angles. See the club section of the README.
+ * The reference numbers are hand-tuned on this app's own panels -- see the note
+ * on REFERENCE_KEYFRAMES.
  */
 
 import * as V from './vec3.js';
 import { rad, sub, clamp } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { naturalAddress, axisDistanceFor } from './arm.js';
-import { ballPosition, getRig } from './rig.js';
+import { ballPosition, torsoBasis } from './rig.js';
 import { wristForDirection } from './club.js';
 import { solvePose } from './pose.js';
 
@@ -112,54 +101,32 @@ export function releaseBlendAt(t) {
  * permit nothing else, because the free arm would have to be longer than it is.
  */
 export const REFERENCE_KEYFRAMES = [
-  // Takeaway -- u holds at 0, so the hand rises on a straight vertical line and
-  // both arms stay equally straight through it: a one-piece takeaway. The club
-  // is aimed at a POINT on the ground, 70 cm back down the target line, rather
-  // than at an elevation: address and takeaway are far apart in bearing around
-  // the forearm, and aiming an elevation let the interpolated hinge dip the
-  // head under the turf on the way.
-  { t: 0, thetaDeg: 0, u: 0.0, v: -0.4668, cockDeg: 19.9, bowDeg: 24.5, faceDeg: 0, label: 'P1 address' },
-  { t: 0.2149, thetaDeg: 25, u: 0.0, v: -0.3651, cockDeg: 17.7, bowDeg: 16.3, faceDeg: -3.3, label: 'P1.5 takeaway' },
-  // Backswing. Rory sets the club LATE for the driver: barely 23 degrees of
-  // hinge at P2, the full set only arriving with P3. The times are solved from
-  // the sin^2 rate profile -- see the tempo notes -- so the torso rests at
-  // address and accelerates smoothly through the turn.
-  { t: 0.3316, thetaDeg: 65, u: -0.0658, v: -0.23, cockDeg: 3.1, bowDeg: 22.5, faceDeg: -5.2, label: 'P2 shaft parallel' },
-  { t: 0.4106, thetaDeg: 90, u: -0.1273, v: -0.1393, cockDeg: 14.7, bowDeg: 76.6, faceDeg: -6.4, label: 'P3 lead arm parallel' },
-  // The top. GEARS measures Rory's driver shoulder turn at ~116 degrees; the
-  // single-axis torso here carries 110 of it. The shaft is just SHORT OF
-  // PARALLEL, pointing at the target with 12 degrees of elevation and a touch
-  // of lay-off. The clubhead's own apex comes ~50 ms later, between here and
-  // P5 -- the crossover loop -- because the wrists keep deepening while the
-  // hands have already turned back down.
-  { t: 0.6075, thetaDeg: 110, u: -0.2025, v: -0.0285, cockDeg: -80.9, bowDeg: 78.9, faceDeg: -9.4, label: 'P4 top, shoulders 110° away' },
-  // Transition. The shaft LAYS BACK as the hands drop -- the z component is the
-  // shallowing move, the club falling INTO the 50-degree delivery plane -- and
-  // the hinge deepens to 137 degrees, dynamic lag beyond the top's 113.
-  // Vertical-plane targets here (z = 0) read as over-the-top: the head swept
-  // out toward the ball line while still high, which no tour swing does. From
-  // here to the release every checkpoint direction sits IN the delivery plane,
-  // and because the spherical spline follows great circles between them, the
-  // interpolated shaft stays within 1.5 degrees of that plane -- the flat
-  // down-the-line sheet a real driver sweeps.
-  { t: 0.7317, thetaDeg: 55, u: -0.1665, v: -0.1875, cockDeg: -107.2, bowDeg: 84.5, faceDeg: -11.4, label: 'P5 early downswing, lead arm parallel' },
-  // Delivery: shaft parallel to the ground and the target line -- which is
-  // also exactly in the delivery plane, since the plane contains the target
-  // line. Its TIME is solved from the shaft: P6 to impact is 87 degrees of
-  // real arc at ~2600 deg/s.
-  { t: 0.783, thetaDeg: 0, u: -0.0788, v: -0.3578, cockDeg: -61.8, bowDeg: 33.7, faceDeg: -12.2, label: 'P6 delivery, shaft parallel' },
-  { t: 0.81, thetaDeg: -35, u: -0.045, v: -0.3812, cockDeg: -16.6, bowDeg: 6.6, faceDeg: -12.6, label: 'P7 impact' },
-  // The handover. Both arms straight, so u must be 0. The shaft target is 55
-  // degrees PAST the ball-aim, still rotating in the delivery plane -- the
-  // club does not stop at inline, it releases through it.
-  { t: RELEASE_T, thetaDeg: -55, u: 0.0, v: -0.4009, cockDeg: 12.9, bowDeg: 14.1, faceDeg: -12.9, label: 'P7.5 release, both arms straight' },
-  // Follow-through -- the mirror checkpoints of the backswing.
-  { t: 0.853, thetaDeg: -72, u: 0.0219, v: -0.322, cockDeg: 29, bowDeg: 17.5, faceDeg: -13.3, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.892, thetaDeg: -94, u: 0.0618, v: -0.2624, cockDeg: 7.2, bowDeg: 75.7, faceDeg: -13.9, label: 'P9 shoulders 90° to target' },
-  // The finish folds the club right back over the shoulder: 171 degrees of
-  // hinge away from the forearm. The torso-frame chart holds the whole sphere,
-  // so nothing caps it.
-  { t: 1, thetaDeg: -120, u: 0.1912, v: -0.0014, cockDeg: 71.2, bowDeg: 155.5, faceDeg: -15.5, label: 'P10 finish, shoulders 120°' },
+  // HAND-TUNED. Every position and club aim below was set by dragging on the two
+  // panels, then transcribed: hands off the 2D panel, club aims off the club-aim
+  // chart, each converted to wrist angles against that keyframe's own hand frame.
+  // Times and torso angles are unchanged from the solved tempo profile; the face
+  // is re-solved to be square at address and at impact.
+  //
+  // Address sits level with the release and impact hands -- see ADDRESS in
+  // config.js -- and its wrist is re-aimed at the ball whenever the club changes.
+  { t: 0, thetaDeg: 0, u: 0, v: -0.3478, cockDeg: 20.4, bowDeg: 3.1, faceDeg: 0, label: 'P1 address' },
+  { t: 0.2149, thetaDeg: 25, u: 0, v: -0.317, cockDeg: 9.5, bowDeg: 17.2, faceDeg: -7.5, label: 'P1.5 takeaway' },
+  // Backswing: hands straight up the sternum line, then out to the trail side.
+  // P3's club was dragged to the rim of the chart -- straight UP the spine axis.
+  { t: 0.3316, thetaDeg: 65, u: -0.0101, v: -0.1464, cockDeg: -8.7, bowDeg: 15.7, faceDeg: -11.6, label: 'P2 shaft parallel' },
+  { t: 0.4106, thetaDeg: 90, u: -0.0585, v: -0.0374, cockDeg: 34.8, bowDeg: 80.3, faceDeg: -14.4, label: 'P3 lead arm parallel' },
+  // The top, and the transition. P4 -> P5 -> P6 aim the club within 8 and 13
+  // degrees of each other relative to the body, so the club-aim track runs
+  // STRAIGHT between them -- see CURVE.aimStraightBelowDeg.
+  { t: 0.6075, thetaDeg: 110, u: -0.2522, v: 0.0272, cockDeg: -23.3, bowDeg: 36.2, faceDeg: -21.3, label: 'P4 top, shoulders 110° away' },
+  { t: 0.7317, thetaDeg: 55, u: -0.2926, v: -0.1221, cockDeg: -25.2, bowDeg: 40, faceDeg: -25.7, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.783, thetaDeg: 0, u: -0.1917, v: -0.2917, cockDeg: -52.3, bowDeg: 51.8, faceDeg: -27.5, label: 'P6 delivery, shaft parallel' },
+  { t: 0.81, thetaDeg: -35, u: -0.1029, v: -0.3361, cockDeg: -13.3, bowDeg: 14.5, faceDeg: -28.4, label: 'P7 impact' },
+  // The handover. Both arms straight, so u must be 0.
+  { t: RELEASE_T, thetaDeg: -55, u: 0, v: -0.3483, cockDeg: 18.5, bowDeg: 19.2, faceDeg: -29.2, label: 'P7.5 release, both arms straight' },
+  { t: 0.853, thetaDeg: -72, u: 0.0787, v: -0.2837, cockDeg: 46.4, bowDeg: 25.8, faceDeg: -30, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.892, thetaDeg: -94, u: 0.1756, v: -0.1666, cockDeg: 60.7, bowDeg: 40.9, faceDeg: -31.3, label: 'P9 shoulders 90° to target' },
+  { t: 1, thetaDeg: -120, u: 0.281, v: 0.046, cockDeg: 42.6, bowDeg: 82.5, faceDeg: -35.1, label: 'P10 finish, shoulders 120°' },
 ];
 
 
@@ -239,6 +206,31 @@ function transportTangent(a, b, t) {
   if (sin < 1e-12) return t;
   const angle = Math.atan2(sin, V.dot(a, b));
   return V.rotateAbout(t, V.scale(axis, 1 / sin), angle);
+}
+
+/**
+ * The club-aim panel's chart: a shaft direction in torso components (side, up,
+ * fwd) to the exponential map about straight DOWN the spine axis -- radius is the
+ * angle from straight down in degrees, bearing is round the body. A straight
+ * line in (a, b) is a straight line on the panel.
+ */
+function torsoToChart(s, u, f) {
+  const phi = V.deg(Math.acos(clamp(-u, -1, 1)));
+  const flat = Math.hypot(s, f);
+  if (flat < 1e-9) return { a: 0, b: 0 };
+  return { a: (phi * s) / flat, b: (phi * f) / flat };
+}
+
+/** Inverse of `torsoToChart`, straight to a world direction in `basis`. */
+function chartToWorld(c, basis) {
+  const phi = Math.hypot(c.a, c.b);
+  const p = rad(phi);
+  let d = V.scale(basis.up, -Math.cos(p));
+  if (phi > 1e-9) {
+    d = V.addScaled(d, basis.side, (c.a / phi) * Math.sin(p));
+    d = V.addScaled(d, basis.fwd, (c.b / phi) * Math.sin(p));
+  }
+  return V.normalize(d);
 }
 
 /** Geodesic interpolation between two unit vectors. */
@@ -331,6 +323,37 @@ export class SwingPath {
     this.keys = keyframes.map((k) => ({ cockDeg: 0, bowDeg: 0, faceDeg: 0, ...k }));
     this.applyNaturalAddress();
     this.emit();
+  }
+
+  /**
+   * Replace the keyframes wholesale -- an import, or a restored autosave --
+   * WITHOUT re-anchoring P1. Only the channels a keyframe stores are taken, and
+   * the list must match the reference one keyframe for keyframe, so a stale or
+   * foreign file is refused rather than half-applied.
+   */
+  load(keyframes) {
+    if (!Array.isArray(keyframes) || keyframes.length !== REFERENCE_KEYFRAMES.length) {
+      throw new Error(`expected ${REFERENCE_KEYFRAMES.length} keyframes`);
+    }
+    const num = (x) => typeof x === 'number' && Number.isFinite(x);
+    this.keys = REFERENCE_KEYFRAMES.map((ref, i) => {
+      const k = keyframes[i];
+      for (const f of ['t', 'thetaDeg', 'u', 'v', 'cockDeg', 'bowDeg', 'faceDeg']) {
+        if (!num(k?.[f])) throw new Error(`keyframe ${i}: bad ${f}`);
+      }
+      return { ...ref, t: k.t, thetaDeg: k.thetaDeg, u: k.u, v: k.v,
+        cockDeg: k.cockDeg, bowDeg: k.bowDeg, faceDeg: k.faceDeg };
+    });
+    this.emit();
+  }
+
+  /** The stored channels of every keyframe, as plain data -- what `load` takes. */
+  snapshot() {
+    const r = (x) => Math.round(x * 1e4) / 1e4;
+    return this.keys.map((k) => ({
+      label: k.label, t: r(k.t), thetaDeg: r(k.thetaDeg), u: r(k.u), v: r(k.v),
+      cockDeg: r(k.cockDeg), bowDeg: r(k.bowDeg), faceDeg: r(k.faceDeg),
+    }));
   }
 
   /**
@@ -453,6 +476,8 @@ export class SwingPath {
   aimTrack() {
     if (this.aimRev === this.revision && this.aims) return this.aims;
     this.aimRev = this.revision;
+    const charts = [];
+    const torsoDirs = [];
     const dirs = this.keys.map((k) => {
       // The keyframe's own pose, from stored values alone -- no interpolation,
       // so this cannot recurse back into sample().
@@ -464,13 +489,49 @@ export class SwingPath {
         blend: releaseBlendAt(k.t),
         wrist: k,
       });
-      return pose.club.shaftDir;
+      const d = pose.club.shaftDir;
+      const t = {
+        s: V.dot(d, pose.basis.side),
+        u: V.dot(d, pose.basis.up),
+        f: V.dot(d, pose.basis.fwd),
+      };
+      torsoDirs.push(t);
+      charts.push(torsoToChart(t.s, t.u, t.f));
+      return d;
     });
+    // Segments whose two knots aim the club within `aimStraightBelowDeg` of each
+    // other IN THE TORSO FRAME are drawn straight on the club-aim panel instead
+    // of curved. See CURVE in config.js.
+    const straight = charts.slice(0, -1).map((_, i) => {
+      const a = torsoDirs[i];
+      const b = torsoDirs[i + 1];
+      const cos = clamp(a.s * b.s + a.u * b.u + a.f * b.f, -1, 1);
+      return V.deg(Math.acos(cos)) < CURVE.aimStraightBelowDeg;
+    });
+    this.aims = { dirs, charts, straight };
     // Knot tangents: Bessel-weighted average of the one-sided geodesic slopes,
     // expressed in each knot's own tangent plane. Zero at the ends -- the
     // golfer is at rest at address and at the finish.
     const tangents = dirs.map((d, i) => {
       if (i === 0 || i === dirs.length - 1) return { x: 0, y: 0, z: 0 };
+      // A curved segment meeting a straight one has to arrive at the straight
+      // one's own velocity, or the straight segment buys a clean line at the
+      // price of a kink at each end of it. The straight segment's velocity is
+      // measured, not derived: it is chart-linear motion carried round by the
+      // turning torso, and a finite difference captures both at once.
+      const inStraight = straight[i - 1];
+      const outStraight = straight[i];
+      if (inStraight !== outStraight) {
+        const seg = outStraight ? i : i - 1;
+        const k0 = this.keys[seg];
+        const k1 = this.keys[seg + 1];
+        const h = 1e-4;
+        const tAt = outStraight ? k0.t + h : k1.t - h;
+        const s = (tAt - k0.t) / (k1.t - k0.t);
+        const other = this.straightAim(seg, s, this.thetaAt(tAt));
+        const l = logMap(d, other);
+        return V.scale(l, (outStraight ? 1 : -1) / h);
+      }
       const dtPrev = this.keys[i].t - this.keys[i - 1].t;
       const dtNext = this.keys[i + 1].t - this.keys[i].t;
       const toPrev = logMap(d, dirs[i - 1]);
@@ -482,8 +543,28 @@ export class SwingPath {
         z: (dtNext * (-toPrev.z / dtPrev) + dtPrev * (toNext.z / dtNext)) * w,
       };
     });
-    this.aims = { dirs, tangents };
+    this.aims.tangents = tangents;
     return this.aims;
+  }
+
+  /** The chart-linear club aim along straight segment `i`, in world space. */
+  straightAim(i, s, thetaDeg) {
+    const { charts } = this.aims;
+    const c = {
+      a: charts[i].a + (charts[i + 1].a - charts[i].a) * s,
+      b: charts[i].b + (charts[i + 1].b - charts[i].b) * s,
+    };
+    return chartToWorld(c, torsoBasis(rad(thetaDeg)));
+  }
+
+  /** Interpolated torso angle at time t, degrees. Same curve as `sample`. */
+  thetaAt(t) {
+    const keys = this.keys;
+    const clamped = Math.min(Math.max(t, keys[0].t), keys[keys.length - 1].t);
+    let i = 0;
+    while (i < keys.length - 2 && keys[i + 1].t < clamped) i += 1;
+    const span = keys[i + 1].t - keys[i].t || 1e-6;
+    return hermite(keys, i, (clamped - keys[i].t) / span, span, (k) => k.thetaDeg, true);
   }
 
   /** Straight-line length of segment `i` in the (u, v) plane, in metres. */
@@ -522,7 +603,7 @@ export class SwingPath {
      * `faceDeg` is a plain free curve: it is monotone across the whole swing,
      * so there is nothing for a limiter to catch.
      */
-    const { dirs, tangents } = this.aimTrack();
+    const { dirs, tangents, straight: aimStraight } = this.aimTrack();
     const curve = (get) => hermite(keys, i, localT, span, get, false);
     /**
      * The hand track. `u` is overshoot-limited and `v` is not -- see `tangent` --
@@ -548,7 +629,9 @@ export class SwingPath {
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
       /** World shaft direction; `solvePose` turns it back into wrist angles. */
-      aim: sphereCubic(dirs[i], dirs[i + 1], tangents[i], tangents[i + 1], localT, span),
+      aim: aimStraight[i]
+        ? this.straightAim(i, localT, thetaDeg)
+        : sphereCubic(dirs[i], dirs[i + 1], tangents[i], tangents[i + 1], localT, span),
       wrist: {
         faceDeg: curve((k) => k.faceDeg),
       },

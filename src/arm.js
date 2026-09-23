@@ -112,8 +112,8 @@ export function solveAxisDistance(u, v, blend, ratio = ARM_LOCK_RATIO) {
  * about the shoulder centre, in the plane spanned by the spine axis and the chest
  * normal -- the sagittal plane you see the golfer's setup in from the side.
  *
- * The anchor is the point on that circle where the arms hang plumb at the WEDGE,
- * `ADDRESS.anchorTiltDeg`:
+ * The anchor is the point on that circle at `ADDRESS.anchorTiltDeg` -- level
+ * with the reference swing's impact hand, see the note there:
  *     v = -r * cos(anchorTilt)      distance = r * sin(anchorTilt)
  *
  * It does NOT depend on the current spine tilt, and that is the point. Since

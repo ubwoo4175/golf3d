@@ -142,6 +142,20 @@ export const PLANE = {
  */
 export const CURVE = {
   straightBelow: 0,
+  /**
+   * The club's own straight-segment rule. Two consecutive keyframes that aim the
+   * club within this many degrees of each other IN THE TORSO FRAME are joined by
+   * a straight line on the club-aim panel -- the club holds its set relative to
+   * the body and simply turns with it -- instead of by the world-space spherical
+   * spline. The spline gets its tangents from the neighbours, and when the
+   * neighbours are 80 degrees away and the pair itself is 8 apart, it swung out
+   * in a wide arc and back between them: the odd curve through P5.
+   *
+   * 15 catches exactly P4 -> P5 (8 degrees) and P5 -> P6 (13); the next closest
+   * pair, P1 -> P1.5, is 20 apart. The curves either side meet each straight run
+   * at its own velocity, so the joins have no kink.
+   */
+  aimStraightBelowDeg: 15,
 };
 
 /**
@@ -159,15 +173,18 @@ export const ELBOW_HINT = {
  * The address position.
  *
  * The address hand is ANCHORED at a FIXED point on the rectangle -- the same
- * (u, v) for every club. The anchor is where the arms hang plumb at the WEDGE,
- * the shortest club and the most bent-over setup.
+ * (u, v) for every club, u = 0 and v = -34.8 cm. That is where the hand-tuned
+ * reference swing puts it: level with the release hand (v -34.8) and the impact
+ * hand (-33.6), which is the point -- the club that reaches the ball at address
+ * can then reach it again at impact. The anchor used to be where the arms hang
+ * plumb at the wedge (40 degrees, v -46.7), which left the impact hand 8 cm
+ * higher than address and the club short of the ball at impact on every club.
  *
  * Everything else follows from the torso frame rotating underneath it. Pick a
  * longer club, the spine stands up, and the whole arm assembly rotates with it:
- * the hands rise and move FORWARD, from plumb at the wedge to 15.8 cm ahead of
- * plumb at the driver. That is the real behaviour, and it costs nothing in the
- * model -- because (u, v) never changes, no keyframe ever moves when you change
- * club, and the authored swing is untouched.
+ * the hands rise and move forward. That is the real behaviour, and it costs
+ * nothing in the model -- because (u, v) never changes, no keyframe ever moves
+ * when you change club, and the authored swing is untouched.
  *
  * The ball is what moves instead: it is placed where the club actually reaches.
  * A brief experiment had this the other way round, with the arms re-hung plumb
@@ -175,8 +192,11 @@ export const ELBOW_HINT = {
  * centimetres between clubs and tore the takeaway off its own start.
  */
 export const ADDRESS = {
-  /** The tilt at which the arms hang plumb, which is the wedge's own setup. */
-  anchorTiltDeg: 40,
+  /**
+   * Angle of the address hand round the arms' circle, from straight down the
+   * spine axis: v = -r cos(this). 55.2 puts P1 at v = -34.8 cm.
+   */
+  anchorTiltDeg: 55.2,
   /** Butt of the club to the midpoint of the two hands on the grip. */
   gripDown: 0.1,
 };
@@ -205,22 +225,22 @@ export const ADDRESS = {
  */
 export const CLUBS = [
   { id: 'wedge', label: 'Wedge', lengthIn: 35.25, lieDeg: 64.5, spineTiltDeg: 40,
-    ballHeight: 0.021, ballForward: 0.727, ballLateral: -0.02,
+    ballHeight: 0.021, ballForward: 0.845, ballLateral: -0.02,
     type: 'iron', head: { length: 0.080, height: 0.058, depth: 0.025 } },
   { id: 'shortIron', label: 'Short iron', lengthIn: 36, lieDeg: 64, spineTiltDeg: 38,
-    ballHeight: 0.021, ballForward: 0.752, ballLateral: 0.0,
+    ballHeight: 0.021, ballForward: 0.863, ballLateral: 0.0,
     type: 'iron', head: { length: 0.078, height: 0.054, depth: 0.023 } },
   { id: 'midIron', label: 'Mid iron', lengthIn: 37, lieDeg: 62.5, spineTiltDeg: 35,
-    ballHeight: 0.021, ballForward: 0.783, ballLateral: 0.03,
+    ballHeight: 0.021, ballForward: 0.878, ballLateral: 0.03,
     type: 'iron', head: { length: 0.078, height: 0.052, depth: 0.022 } },
   { id: 'longIron', label: 'Long iron', lengthIn: 38.5, lieDeg: 61, spineTiltDeg: 32,
-    ballHeight: 0.021, ballForward: 0.836, ballLateral: 0.06,
+    ballHeight: 0.021, ballForward: 0.916, ballLateral: 0.06,
     type: 'iron', head: { length: 0.080, height: 0.050, depth: 0.021 } },
   { id: 'wood', label: 'Fairway wood', lengthIn: 43, lieDeg: 56.5, spineTiltDeg: 28,
-    ballHeight: 0.021, ballForward: 1.004, ballLateral: 0.1,
+    ballHeight: 0.021, ballForward: 1.08, ballLateral: 0.1,
     type: 'wood', head: { length: 0.095, height: 0.042, depth: 0.060 } },
   { id: 'driver', label: 'Driver', lengthIn: 45.5, lieDeg: 56, spineTiltDeg: 25,
-    ballHeight: 0.055, ballForward: 1.121, ballLateral: 0.16,
+    ballHeight: 0.055, ballForward: 1.187, ballLateral: 0.16,
     type: 'wood', head: { length: 0.118, height: 0.062, depth: 0.086 } },
 ];
 
@@ -282,7 +302,7 @@ export const CLUB = {
    * convenient frame but an arbitrary zero, and this shifts it onto one that
    * means something. Re-solve it if the address wrist angles change.
    */
-  faceZeroDeg: -84.2,
+  faceZeroDeg: -87.8,
   /** How far the butt end sticks out beyond the hands -- the grip-down. */
   buttBeyondHands: 0.1,
   shaftRadius: 0.006,

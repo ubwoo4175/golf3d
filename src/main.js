@@ -66,7 +66,7 @@ speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 1
  *
  * Unlike the old spine slider, this is not just a tilt: the club owns its spine
  * angle, its length and its ball position, and the address hand follows from the
- * arms hanging plumb at that angle. So all four are re-derived together, in
+ * anchored address point. So all four are re-derived together, in
  * dependency order -- tilt, then the address hand, then the rectangle and club
  * length that are pinned to it, then the address wrist that aims at the ball.
  *
@@ -92,6 +92,78 @@ $('reset-path').addEventListener('click', () => {
   applyClub(Number(clubInput.value));
 });
 $('reset-camera').addEventListener('click', () => sceneView.resetCamera());
+
+// --- saving and sharing the swing ------------------------------------------
+//
+// A tuned swing lived only in the open tab: reload, and it was gone, and the
+// only way to hand it on was a screenshot someone had to measure by eye. Now:
+//
+//   - every edit made by DRAGGING is saved to this browser, and restored on load;
+//   - "Copy swing" puts the exact keyframes on the clipboard as JSON;
+//   - "Load swing" takes that JSON back, in this browser or any other.
+//
+// Only edits are saved -- not the defaults -- so a saved swing never masks a
+// newer set of defaults you have not touched. "Reset swing" forgets it.
+
+const SAVE_KEY = 'golf3d.swing.v1';
+const forget = () => {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch {
+    /* storage unavailable: nothing to forget */
+  }
+};
+const save = () => {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(swing.snapshot()));
+  } catch {
+    /* storage unavailable: the swing still works, it just is not kept */
+  }
+};
+
+try {
+  const saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');
+  if (saved) swing.load(saved);
+} catch {
+  forget(); // stale or corrupt: fall back to the defaults
+}
+
+// Saved when a drag on either panel actually changed something.
+for (const surface of [$('plane-canvas'), $('wrist-overlay')]) {
+  let before = null;
+  surface.addEventListener('pointerdown', () => {
+    before = swing.revision;
+  });
+  surface.addEventListener('pointerup', () => {
+    if (before !== null && swing.revision !== before) save();
+    before = null;
+  });
+}
+$('reset-path').addEventListener('click', forget);
+
+$('copy-swing').addEventListener('click', async () => {
+  const text = JSON.stringify(swing.snapshot(), null, 1);
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copy-swing').textContent = 'Copied ✓';
+    setTimeout(() => ($('copy-swing').textContent = 'Copy swing'), 1500);
+  } catch {
+    window.prompt('Copy the swing:', text);
+  }
+});
+$('load-swing').addEventListener('click', () => {
+  const text = window.prompt('Paste a swing copied with "Copy swing":');
+  if (!text) return;
+  try {
+    swing.load(JSON.parse(text));
+    save();
+  } catch (error) {
+    window.alert(`Could not load that swing: ${error.message}`);
+  }
+});
+
+// For the console: `golf.swing.snapshot()` is the same JSON "Copy swing" gives.
+window.golf = { swing, store };
 
 /**
  * Flip handedness. The keyframes are untouched -- u is always measured toward
