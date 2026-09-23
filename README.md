@@ -761,6 +761,22 @@ trace is a single clean arc, with exactly three height turning points:
 | 0.811 | 0.23 m | the low point — impact, 23 cm above the turf |
 | 0.927 | 2.09 m | into the finish |
 
+### The club carries through the top
+
+The body turns round at P4; the club should not — not yet. Its knot tangent
+used to be the usual Bessel average of the way in and the way out, and at the
+top the way out points back toward P5, so the curve finished turning the club
+round *before* it got there: the clubhead's turn-around landed in the backswing,
+at t = 0.572, 43 ms ahead of the top.
+
+At the top keyframe the club now arrives still travelling the way it came from
+P3, at that segment's average rate times `CURVE.topCarry` (1). The transition
+segment carries it about 3° past P4's aim and swings it back, so the turn-around
+is at **t = 0.625** — early in the orange, 14% of the way from P4 to P5, as the
+body is already starting down. That is the lag of a real transition. At 0.5 the
+club slows twice, once either side of the top; at 1.5 it goes 5.6° past and
+turns at 0.629.
+
 ### Straight runs on the club-aim chart
 
 Where two neighbouring keyframes aim the club almost the same way *relative to

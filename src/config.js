@@ -157,6 +157,14 @@ export const CURVE = {
    * either side meet each straight run at its own velocity, so no kink.
    */
   aimStraightBelowDeg: 15,
+  /**
+   * How hard the club carries through the top of the backswing. At the top
+   * keyframe the club arrives still moving the way it came, at this multiple of
+   * its average rate over the segment before, so it turns round early in the
+   * transition rather than before the top. 0 would stop the club dead at the
+   * top keyframe; larger values carry it further back and turn it round later.
+   */
+  topCarry: 1,
 };
 
 /**

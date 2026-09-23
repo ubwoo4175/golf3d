@@ -499,7 +499,18 @@ export class SwingPath {
     // Segments whose two knots aim the club within `aimStraightBelowDeg` of each
     // other IN THE TORSO FRAME are drawn straight on the club-aim panel instead
     // of curved. See CURVE in config.js.
+    // The top of the backswing: the keyframe where the torso turns round.
+    const top = this.keys.findIndex(
+      (k, i) =>
+        i > 0 &&
+        i < this.keys.length - 1 &&
+        k.thetaDeg >= this.keys[i - 1].thetaDeg &&
+        k.thetaDeg > this.keys[i + 1].thetaDeg,
+    );
     const straight = charts.slice(0, -1).map((_, i) => {
+      // Either side of the top the club has to carry through, which a
+      // straight run cannot do -- see the top tangent below.
+      if (i === top || i === top - 1) return false;
       const a = torsoDirs[i];
       const b = torsoDirs[i + 1];
       const cos = clamp(a.s * b.s + a.u * b.u + a.f * b.f, -1, 1);
@@ -511,6 +522,19 @@ export class SwingPath {
     // golfer is at rest at address and at the finish.
     const tangents = dirs.map((d, i) => {
       if (i === 0 || i === dirs.length - 1) return { x: 0, y: 0, z: 0 };
+      // THE TOP. The body turns round here, but the club does not -- not yet.
+      // A Bessel tangent averages the way in with the way out, and at the top
+      // the way out is back toward P5, so the curve had to finish turning the
+      // club round BEFORE it arrived: the clubhead's turn-around landed in the
+      // backswing, 43 ms ahead of the top. Instead the club arrives still
+      // travelling the way it came from P3, at that segment's average rate
+      // times `CURVE.topCarry`, and the transition segment carries it on a few
+      // degrees further before swinging it back. That is the lag of a real
+      // transition: the body starts down while the club is still going back.
+      if (i === top) {
+        const away = V.scale(logMap(d, dirs[i - 1]), -1);
+        return V.scale(away, CURVE.topCarry / (this.keys[i].t - this.keys[i - 1].t));
+      }
       // A curved segment meeting a straight one has to arrive at the straight
       // one's own velocity, or the straight segment buys a clean line at the
       // price of a kink at each end of it. The straight segment's velocity is
