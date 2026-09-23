@@ -7,10 +7,11 @@
  * the new shape on the next frame.
  */
 
-import { TIMING, REACH, CLUBS, clubReach } from './config.js';
+import { TIMING, REACH, CLUBS, SCENE, clubReach } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
+import { CONSTRAINTS, applyConstraints, faceCentre } from './constraints.js';
 import { setHandedness, setClub, getClub, setPlaneOffset, getRig, ballPosition } from './rig.js';
-import { setClubLength, setClubLie } from './club.js';
+import { setClubLength, setClubLie, faceAngleToTarget } from './club.js';
 import { distance } from './vec3.js';
 import { Store } from './state.js';
 import { PlaneView } from './view2d.js';
@@ -18,6 +19,36 @@ import { WristView } from './view-wrist.js';
 import { SceneView } from './view3d.js';
 
 const $ = (id) => document.getElementById(id);
+
+// --- settings kept between visits: ball position per club, constraints -------
+//
+// Loaded before anything is built, since the ball's position feeds the address
+// the swing starts from and the scene's static geometry.
+
+const SETTINGS_KEY = 'golf3d.settings.v1';
+const BALL_FIELDS = ['ballHeight', 'ballForward', 'ballLateral'];
+const BALL_DEFAULTS = Object.fromEntries(
+  CLUBS.map((c) => [c.id, Object.fromEntries(BALL_FIELDS.map((f) => [f, c[f]]))]),
+);
+const settings = { balls: {}, constraints: {}, held: {} };
+try {
+  Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}'));
+} catch {
+  /* corrupt: start from the defaults */
+}
+for (const club of CLUBS) {
+  const saved = settings.balls[club.id];
+  for (const f of BALL_FIELDS) {
+    if (typeof saved?.[f] === 'number' && Number.isFinite(saved[f])) club[f] = saved[f];
+  }
+}
+const saveSettings = () => {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* storage unavailable: settings last for this visit only */
+  }
+};
 
 const swing = new SwingPath();
 const store = new Store(swing);
@@ -55,10 +86,152 @@ const syncToAddress = () => {
 swing.onChange(syncToAddress);
 syncToAddress();
 
+// --- constraints -----------------------------------------------------------
+//
+// Re-imposed after every change to the swing, so a rule that is on stays true
+// whatever you drag. Registered after syncToAddress so the club length is
+// current; the re-entrant emit it makes is ignored by the guard.
+
+const active = Object.fromEntries(CONSTRAINTS.map((c) => [c.id, !!settings.constraints[c.id]]));
+const statusEls = {};
+const buttons = {};
+let enforcing = false;
+
+function showStatus(status = {}) {
+  for (const c of CONSTRAINTS) {
+    const el = statusEls[c.id];
+    const text = active[c.id] ? status[c.id] : null;
+    // "on" reads as a tick on the rule itself; anything else is a warning.
+    el.textContent = !text ? c.hint : text === 'on' ? `✓ ${c.hint}` : text.replace(/^on · /, '✓ ');
+    el.className = !text ? '' : text.startsWith('on') ? 'on' : 'warn';
+    el.title = text ? `${c.title} — ${text}` : c.title;
+    buttons[c.id].setAttribute('aria-pressed', String(active[c.id]));
+  }
+}
+
+function enforce() {
+  if (enforcing) return;
+  enforcing = true;
+  try {
+    const { changed, status } = applyConstraints(swing.keys, active);
+    if (changed) swing.emit();
+    showStatus(status);
+  } finally {
+    enforcing = false;
+  }
+}
+swing.onChange(enforce);
+
+// The keyframe each constraint owns. Its values are held while the rule is on
+// and handed back when it is switched off, so a toggle is a toggle.
+const OWNED = { p1: 'P1', p2: 'P2', p6: 'P6', p7: 'P7' };
+const FIELDS = ['thetaDeg', 'u', 'v', 'cockDeg', 'bowDeg', 'faceDeg'];
+const keyOf = (id) => swing.keys.find((k) => k.label.split(' ')[0] === OWNED[id]);
+const valuesOf = (key) => Object.fromEntries(FIELDS.map((f) => [f, key[f]]));
+
+/**
+ * Make a change that re-derives keyframes -- a new club, a reset, a loaded
+ * swing, a flip, a moved ball -- with the rules held off until it is done, then
+ * impose them once. A keyframe the change itself rewrote gets its new values
+ * held, so switching its rule off later hands back those, not stale ones.
+ */
+function rebase(change) {
+  const before = Object.fromEntries(CONSTRAINTS.map((c) => [c.id, JSON.stringify(valuesOf(keyOf(c.id)))]));
+  enforcing = true;
+  try {
+    change();
+  } finally {
+    enforcing = false;
+  }
+  for (const c of CONSTRAINTS) {
+    const now = valuesOf(keyOf(c.id));
+    if (active[c.id] && JSON.stringify(now) !== before[c.id]) settings.held[c.id] = now;
+  }
+  saveSettings();
+  enforce();
+}
+
+for (const c of CONSTRAINTS) {
+  const row = document.createElement('div');
+  row.className = 'constraint-row';
+  const button = document.createElement('button');
+  button.textContent = c.label;
+  button.title = c.title;
+  const status = document.createElement('span');
+  row.append(button, status);
+  $('constraint-list').append(row);
+  buttons[c.id] = button;
+  statusEls[c.id] = status;
+  button.addEventListener('click', () => {
+    active[c.id] = !active[c.id];
+    settings.constraints[c.id] = active[c.id];
+    const key = keyOf(c.id);
+    if (active[c.id]) {
+      settings.held[c.id] = valuesOf(key);
+      enforce();
+    } else {
+      const held = settings.held[c.id];
+      delete settings.held[c.id];
+      if (held) Object.assign(key, held);
+      swing.emit();
+    }
+    saveSettings();
+  });
+}
+
 playButton.addEventListener('click', () => store.set({ playing: !store.state.playing }));
 scrub.addEventListener('input', () =>
   store.set({ t: Number(scrub.value) / 1000, playing: false }),
 );
+
+// A tick per keyframe on the scrubber. A click -- not a drag -- that lands
+// within a few pixels of one goes exactly to that keyframe.
+const ticks = $('scrub-ticks');
+let tickTimes = '';
+function buildTicks() {
+  const times = swing.keys.map((k) => k.t).join();
+  if (times === tickTimes) return;
+  tickTimes = times;
+  ticks.replaceChildren(
+    ...swing.keys.map((k) => {
+      const tag = k.label.split(' ')[0];
+      const tick = document.createElement('i');
+      tick.className = `scrub-tick${tag.includes('.') ? ' half' : ''}`;
+      tick.style.left = `${k.t * 100}%`;
+      if (!tag.includes('.')) {
+        const label = document.createElement('b');
+        label.textContent = tag.slice(1);
+        tick.append(label);
+      }
+      return tick;
+    }),
+  );
+}
+buildTicks();
+swing.onChange(buildTicks);
+
+const SNAP_PX = 10;
+let press = null;
+scrub.addEventListener('pointerdown', (event) => {
+  press = { x: event.clientX, y: event.clientY };
+});
+scrub.addEventListener('pointerup', (event) => {
+  if (!press) return;
+  const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+  press = null;
+  if (moved > 4) return;
+  const box = ticks.getBoundingClientRect();
+  if (box.width <= 0) return;
+  let best = null;
+  for (const [i, k] of swing.keys.entries()) {
+    const px = Math.abs(box.left + k.t * box.width - event.clientX);
+    if (px <= SNAP_PX && (!best || px < best.px)) best = { i, px };
+  }
+  if (best) {
+    store.seekKeyframe(best.i);
+    scrub.value = String(Math.round(swing.keys[best.i].t * 1000));
+  }
+});
 speed.addEventListener('input', () => store.set({ speed: Number(speed.value) / 100 }));
 
 /**
@@ -83,14 +256,78 @@ function applyClub(index) {
   sceneView.rebuildRig();
 }
 
-clubInput.addEventListener('input', () => applyClub(Number(clubInput.value)));
+clubInput.addEventListener('input', () => {
+  rebase(() => applyClub(Number(clubInput.value)));
+  showBall();
+});
+
+// --- ball position ---------------------------------------------------------
+//
+// Per club, in the units you would use on the range: tee height is the gap
+// under the ball; "from feet" is measured out from the line the feet stand on;
+// stance is + toward the lead foot. Moving the ball re-aims the address club at
+// it; with P1 on, the address hand moves too, so the face stays on the ball.
+
+const FEET_LINE = -0.02; // where the legs meet the ground, along the chest normal
+const ball = {
+  tee: { input: $('ball-tee'), out: $('ball-tee-out'),
+    get: (c) => (c.ballHeight - SCENE.ballRadius) * 100,
+    set: (c, x) => (c.ballHeight = SCENE.ballRadius + x / 100),
+    text: (x) => `${x.toFixed(1)} cm` },
+  out: { input: $('ball-out'), out: $('ball-out-out'),
+    get: (c) => (c.ballForward - FEET_LINE) * 100,
+    set: (c, x) => (c.ballForward = FEET_LINE + x / 100),
+    text: (x) => `${x.toFixed(1)} cm` },
+  side: { input: $('ball-side'), out: $('ball-side-out'),
+    get: (c) => c.ballLateral * 100,
+    set: (c, x) => (c.ballLateral = x / 100),
+    text: (x) => `${x > 0 ? '+' : ''}${x.toFixed(1)} cm` },
+};
+
+function showBall() {
+  const club = getClub();
+  for (const b of Object.values(ball)) {
+    const x = b.get(club);
+    b.input.value = String(x);
+    b.out.textContent = b.text(x);
+  }
+}
+
+function moveBall({ remember = true } = {}) {
+  const club = getClub();
+  if (remember) settings.balls[club.id] = Object.fromEntries(BALL_FIELDS.map((f) => [f, club[f]]));
+  else delete settings.balls[club.id];
+  sceneView.rebuildRig();
+  saveSettings();
+  // With P1 on, the rule itself puts the face on the ball -- hand and all.
+  if (!active.p1) swing.applyAddressClub();
+  swing.emit();
+}
+
+for (const b of Object.values(ball)) {
+  b.input.addEventListener('input', () => {
+    const x = Number(b.input.value);
+    b.set(getClub(), x);
+    b.out.textContent = b.text(x);
+    moveBall();
+  });
+}
+$('reset-ball').addEventListener('click', () => {
+  const club = getClub();
+  Object.assign(club, BALL_DEFAULTS[club.id]);
+  showBall();
+  moveBall({ remember: false });
+});
+showBall();
 
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
 $('next-key').addEventListener('click', () => store.stepKeyframe(1));
-$('reset-path').addEventListener('click', () => {
-  swing.reset();
-  applyClub(Number(clubInput.value));
-});
+$('reset-path').addEventListener('click', () =>
+  rebase(() => {
+    swing.reset();
+    applyClub(Number(clubInput.value));
+  }),
+);
 $('reset-camera').addEventListener('click', () => sceneView.resetCamera());
 
 // --- saving and sharing the swing ------------------------------------------
@@ -127,6 +364,7 @@ try {
 } catch {
   forget(); // stale or corrupt: fall back to the defaults
 }
+enforce(); // rules left on last visit hold from the first frame
 
 // Saved when a drag on either panel actually changed something.
 for (const surface of [$('plane-canvas'), $('wrist-overlay')]) {
@@ -155,7 +393,8 @@ $('load-swing').addEventListener('click', () => {
   const text = window.prompt('Paste a swing copied with "Copy swing":');
   if (!text) return;
   try {
-    swing.load(JSON.parse(text));
+    const keys = JSON.parse(text);
+    rebase(() => swing.load(keys));
     save();
   } catch (error) {
     window.alert(`Could not load that swing: ${error.message}`);
@@ -174,9 +413,11 @@ function applyHandedness(handedness) {
   store.set({ handedness });
   // The ball mirrors with the golfer, so the address club has to be re-aimed at
   // it -- without this the flip left the head 70 cm off the ball.
-  syncToAddress();
-  swing.applyAddressClub();
-  swing.emit(); // world positions changed, so drop the cached path
+  rebase(() => {
+    syncToAddress();
+    swing.applyAddressClub();
+    swing.emit(); // world positions changed, so drop the cached path
+  });
   planeView.layout(); // the horizontal axes follow handedness in both panels
   wristView.layout();
   sceneView.rebuildRig({ mirrorCamera: true });
@@ -259,11 +500,17 @@ function updateReadouts(pose) {
   const { club } = pose;
   readouts.wrist.textContent =
     `${club.hingeDeg.toFixed(0)}° hinge · cock ${club.cockDeg.toFixed(0)} bow ${club.bowDeg.toFixed(0)}`;
-  // Face angle is only meaningful when the club is near the ball, so the
-  // head-to-ball distance is reported alongside it rather than on its own.
-  const toBall = distance(club.head, ballPosition()) * 100;
+  // The stored roll, then what it amounts to at the ball: the face's angle to
+  // the target line (+ open) and the gap from the middle of the face to the
+  // ball. Those two only mean something near the ball, so they come together.
+  const gap = (distance(faceCentre(club), ballPosition()) - SCENE.ballRadius) * 100;
+  const open = faceAngleToTarget(club, getRig().H);
+  const deg = (x) => {
+    const r = Math.round(x) || 0; // no "-0"
+    return `${r > 0 ? '+' : ''}${r}°`;
+  };
   readouts.club.textContent =
-    `face ${club.faceDeg >= 0 ? '+' : ''}${club.faceDeg.toFixed(0)}° · head ${toBall.toFixed(0)} cm from ball`;
+    `roll ${deg(club.faceDeg)} · face ${deg(open)} · ${gap.toFixed(gap < 10 ? 1 : 0)} cm`;
 
   const active = swing.keys[swing.nearestKeyframeIndex(t)];
   readouts.keyframe.textContent =
@@ -275,6 +522,9 @@ function updateReadouts(pose) {
 store.subscribe((state) => {
   playButton.textContent = state.playing ? '❚❚ Pause' : '▶ Play';
   if (document.activeElement !== scrub) scrub.value = String(Math.round(state.t * 1000));
+  swing.keys.forEach((k, i) =>
+    ticks.children[i]?.classList.toggle('on', Math.abs(k.t - state.t) < 1e-3),
+  );
   const sides = getRig().sides;
   handButton.textContent = `${state.handedness === 'right' ? 'Right' : 'Left'}-handed`;
   handButton.title = `Lead arm is the ${sides.lead}. Click or press H to flip.`;

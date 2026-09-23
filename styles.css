@@ -143,7 +143,8 @@ main {
 
 footer {
   border-top: 1px solid var(--line);
-  padding: 8px 16px 10px;
+  /* Room above the swing scrubber for its keyframe labels. */
+  padding: 15px 16px 10px;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -359,4 +360,160 @@ button.toggle-button {
 .slider.club output {
   min-width: 76px;
   text-align: left;
+}
+
+/*
+ * Swing scrubber with a tick per keyframe. The ticks sit in an overlay that
+ * ignores the pointer, so the range input underneath still gets every drag; a
+ * click that lands near a tick is snapped onto it in main.js. The browser insets
+ * the thumb's travel by half its width, so the ticks are inset the same.
+ */
+.slider.scrub {
+  min-width: 220px;
+}
+
+.scrub-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  --thumb-inset: 8px;
+}
+
+.scrub-wrap input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+#scrub-ticks {
+  position: absolute;
+  inset: 0 var(--thumb-inset);
+  pointer-events: none;
+}
+
+.scrub-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: rgba(219, 228, 240, 0.45);
+}
+
+.scrub-tick.half {
+  top: 1px;
+  bottom: 1px;
+  background: rgba(219, 228, 240, 0.25);
+}
+
+.scrub-tick.on {
+  background: #ffd166;
+}
+
+.scrub-tick b {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 600 9px ui-monospace, Menlo, monospace;
+  letter-spacing: 0;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.scrub-tick.on b {
+  color: #ffd166;
+}
+
+/* Ball and constraint controls, in the empty corner under the 3D pane title. */
+.scene-tools {
+  position: absolute;
+  top: 30px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 232px;
+  padding: 8px 10px;
+  background: rgba(14, 21, 34, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+
+button.mini {
+  padding: 1px 7px;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.constraint-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.constraint-row button {
+  flex: 0 0 38px;
+  padding: 2px 0;
+  font: 600 11px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+}
+
+.constraint-row button[aria-pressed='true'] {
+  background: #17385c;
+  border-color: #4aa3ff;
+  color: var(--text);
+}
+
+.constraint-row span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.constraint-row span.on {
+  color: #78f0be;
+}
+
+.constraint-row span.warn {
+  color: #ffb86b;
+}
+
+.mini-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-slider span {
+  flex: 0 0 56px;
+}
+
+.mini-slider output {
+  flex: 0 0 58px;
+  text-align: right;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: var(--text);
 }

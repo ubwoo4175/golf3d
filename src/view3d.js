@@ -249,6 +249,14 @@ export class SceneView {
     const ballAt = ballPosition();
     const ballZ = ballAt.z;
     joint(group, SCENE.ballRadius, '#ffffff').position.copy(v3(ballAt));
+    // A tee under a ball that is off the ground.
+    const tee = ballAt.y - SCENE.ballRadius;
+    if (tee > 0.002) {
+      new Segment(group, 0.003, '#e9dcc0', 1, 0.007).aim(
+        V.vec(ballAt.x, 0, ballAt.z),
+        V.vec(ballAt.x, tee, ballAt.z),
+      );
+    }
 
     // Target line: the ball flies toward +X for either handedness.
     group.add(

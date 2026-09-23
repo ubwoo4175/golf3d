@@ -498,6 +498,7 @@ golfer standing still. The angle is always interpolated as a curve.
 | Drag on the 2D rectangle | Grabs the nearest keyframe handle, or the keyframe nearest the current time, and moves it. The 3D path reshapes live. |
 | Drag on the club-aim chart | Aims the shaft: distance from the centre is how far the club is from hanging straight down, direction is which way round the body it points. |
 | Drag the dial, bottom left of the club-aim chart | Rolls the clubface about the shaft. |
+| Swing scrubber | Drag to scrub. The ticks are the keyframes (labelled P1–P10; the short ones are P1.5 and P7.5); a click within a few pixels of a tick lands exactly on that keyframe. |
 | Space | Play / pause |
 | ← / → | Step keyframe |
 | H, or the handedness button | Flip right- / left-handed |
@@ -506,6 +507,8 @@ golfer standing still. The angle is always interpolated as a curve.
 | Copy swing | Puts the exact keyframes on the clipboard as JSON. |
 | Load swing | Pastes that JSON back — in this browser or any other. |
 | Reset swing | Back to the defaults, and forgets the saved swing. |
+| Ball: tee / from feet / stance | Top left of the 3D pane, per club: tee height under the ball, distance out from the line of the feet, and position in the stance (+ toward the lead foot). Moving the ball re-aims the address club at it. *reset* restores the club's standard position. |
+| Constraints: P2 P6 P1 P7 | Top left of the 3D pane. Rules that are re-imposed after every edit; see below. |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference
 hand position. Dragging rewrites a keyframe's hand position; it never changes its
@@ -523,6 +526,29 @@ To hand a swing on — to someone else, or to become the new defaults — use
 decimal places, rather than anything read back off the screen. The same data is
 at `golf.swing.snapshot()` in the browser console.
 
+### Constraints
+
+Four toggles, under the 3D pane's title. While one is on, it is re-imposed
+after every change -- a drag, a new club, a moved ball, a flip -- so it stays
+true whatever you do; the part of the keyframe it does not own is still yours
+to drag. Switching one off hands the keyframe back as it was when you switched
+it on. Which are on, and the ball positions, are remembered in the browser.
+
+| Rule | What it pins |
+| --- | --- |
+| **P2** | The shaft exactly parallel to the ground and the target line, pointing back. Only the club's aim; the hand and the face roll are free. |
+| **P6** | The same, at delivery. |
+| **P1** | The middle of the face against the back of the ball, face square to the target line. The club is rigid and the hand sits on the arms' circle, so the address hand slides along that circle (P1's `v`, with `u = 0`) until the club is exactly long enough -- move the ball and the hands follow it. |
+| **P7** | The club back where it was at address: the head exactly on P1's head, the face square, and the hands as close to P1's hands as the arm rules allow. |
+
+P7 has a catch, and it says so in its status line. The rig turns the shoulders
+about a fixed spine -- there is no hip slide toward the target and no side bend
+-- so with the shoulders 35 degrees open the straight lead arm cannot get the
+hands low enough for the club to reach the ball: it comes up about 7 cm short.
+When that happens P7 eases the impact turn back toward square just as far as it
+has to (about -8 degrees with the default driver) and shows the turn it used.
+Move the ball closer, or tee it higher, and it needs less.
+
 ## Layout
 
 | File | Responsibility |
@@ -534,6 +560,7 @@ at `golf.swing.snapshot()` in the browser console.
 | `src/club.js` | **Club.** Wrist angles → shaft direction and face normal, and the inverse solve. |
 | `src/pose.js` | The composer: driving values in, one full world-space pose out. The only module that knows the whole chain. |
 | `src/swing.js` | Keyframe track, interpolation, phase segmentation, path sampling. |
+| `src/constraints.js` | The P1 / P2 / P6 / P7 toggleable rules, and the solves that impose them. |
 | `src/state.js` | The single observable store all three views subscribe to. |
 | `src/canvas2d.js` | Canvas plumbing for the hand panel: fit, hit-test, pointer capture, drag. |
 | `src/view2d.js` | The hand rectangle, head-on. |
