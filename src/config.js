@@ -151,9 +151,10 @@ export const CURVE = {
    * neighbours are 80 degrees away and the pair itself is 8 apart, it swung out
    * in a wide arc and back between them: the odd curve through P5.
    *
-   * 15 catches exactly P4 -> P5 (8 degrees) and P5 -> P6 (13); the next closest
-   * pair, P1 -> P1.5, is 20 apart. The curves either side meet each straight run
-   * at its own velocity, so the joins have no kink.
+   * 15 was set when P4 -> P5 -> P6 sat 8 and 13 degrees apart. The current
+   * reference swing spreads them to 25 and 24, so the rule is dormant on the
+   * defaults and only wakes for a pair you drag close together. The curves
+   * either side meet each straight run at its own velocity, so no kink.
    */
   aimStraightBelowDeg: 15,
 };

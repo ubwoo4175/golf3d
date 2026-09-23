@@ -109,24 +109,21 @@ export const REFERENCE_KEYFRAMES = [
   //
   // Address sits level with the release and impact hands -- see ADDRESS in
   // config.js -- and its wrist is re-aimed at the ball whenever the club changes.
-  { t: 0, thetaDeg: 0, u: 0, v: -0.3478, cockDeg: 20.4, bowDeg: 3.1, faceDeg: 0, label: 'P1 address' },
-  { t: 0.2149, thetaDeg: 25, u: 0, v: -0.317, cockDeg: 9.5, bowDeg: 17.2, faceDeg: -7.5, label: 'P1.5 takeaway' },
+  { t: 0, thetaDeg: 0, u: 0, v: -0.3478, cockDeg: 16.6695, bowDeg: 12.7746, faceDeg: 0, label: 'P1 address' },
+  { t: 0.2149, thetaDeg: 25, u: 0, v: -0.317, cockDeg: 3.4244, bowDeg: 17.9078, faceDeg: -7.5, label: 'P1.5 takeaway' },
   // Backswing: hands straight up the sternum line, then out to the trail side.
-  // P3's club was dragged to the rim of the chart -- straight UP the spine axis.
-  { t: 0.3316, thetaDeg: 65, u: -0.0101, v: -0.1464, cockDeg: -8.7, bowDeg: 15.7, faceDeg: -11.6, label: 'P2 shaft parallel' },
-  { t: 0.4106, thetaDeg: 90, u: -0.0585, v: -0.0374, cockDeg: 34.8, bowDeg: 80.3, faceDeg: -14.4, label: 'P3 lead arm parallel' },
-  // The top, and the transition. P4 -> P5 -> P6 aim the club within 8 and 13
-  // degrees of each other relative to the body, so the club-aim track runs
-  // STRAIGHT between them -- see CURVE.aimStraightBelowDeg.
-  { t: 0.6075, thetaDeg: 110, u: -0.2522, v: 0.0272, cockDeg: -23.3, bowDeg: 36.2, faceDeg: -21.3, label: 'P4 top, shoulders 110° away' },
-  { t: 0.7317, thetaDeg: 55, u: -0.2926, v: -0.1221, cockDeg: -25.2, bowDeg: 40, faceDeg: -25.7, label: 'P5 early downswing, lead arm parallel' },
-  { t: 0.783, thetaDeg: 0, u: -0.1917, v: -0.2917, cockDeg: -52.3, bowDeg: 51.8, faceDeg: -27.5, label: 'P6 delivery, shaft parallel' },
-  { t: 0.81, thetaDeg: -35, u: -0.1029, v: -0.3361, cockDeg: -13.3, bowDeg: 14.5, faceDeg: -28.4, label: 'P7 impact' },
+  { t: 0.3316, thetaDeg: 65, u: -0.0101, v: -0.1464, cockDeg: -6.5398, bowDeg: 14.5143, faceDeg: -11.6, label: 'P2 shaft parallel' },
+  { t: 0.4106, thetaDeg: 90, u: -0.0585, v: -0.0374, cockDeg: -42.4666, bowDeg: 46.9219, faceDeg: -14.4, label: 'P3 lead arm parallel' },
+  // The top, and the transition.
+  { t: 0.6075, thetaDeg: 110, u: -0.2522, v: 0.0272, cockDeg: -51.9087, bowDeg: 75.9887, faceDeg: -21.3, label: 'P4 top, shoulders 110° away' },
+  { t: 0.7317, thetaDeg: 55, u: -0.2764, v: -0.1275, cockDeg: -37.9784, bowDeg: 53.5681, faceDeg: -25.7, label: 'P5 early downswing, lead arm parallel' },
+  { t: 0.783, thetaDeg: 0, u: -0.1875, v: -0.2852, cockDeg: -39.28, bowDeg: 35.1228, faceDeg: -27.5, label: 'P6 delivery, shaft parallel' },
+  { t: 0.81, thetaDeg: -35, u: -0.1029, v: -0.3361, cockDeg: -3.2503, bowDeg: 10.0599, faceDeg: -28.4, label: 'P7 impact' },
   // The handover. Both arms straight, so u must be 0.
-  { t: RELEASE_T, thetaDeg: -55, u: 0, v: -0.3483, cockDeg: 18.5, bowDeg: 19.2, faceDeg: -29.2, label: 'P7.5 release, both arms straight' },
-  { t: 0.853, thetaDeg: -72, u: 0.0787, v: -0.2837, cockDeg: 46.4, bowDeg: 25.8, faceDeg: -30, label: 'P8 follow-through, shaft parallel' },
-  { t: 0.892, thetaDeg: -94, u: 0.1756, v: -0.1666, cockDeg: 60.7, bowDeg: 40.9, faceDeg: -31.3, label: 'P9 shoulders 90° to target' },
-  { t: 1, thetaDeg: -120, u: 0.281, v: 0.046, cockDeg: 42.6, bowDeg: 82.5, faceDeg: -35.1, label: 'P10 finish, shoulders 120°' },
+  { t: RELEASE_T, thetaDeg: -55, u: 0, v: -0.3483, cockDeg: 18.938, bowDeg: 9.9927, faceDeg: -29.2, label: 'P7.5 release, both arms straight' },
+  { t: 0.853, thetaDeg: -72, u: 0.0787, v: -0.2837, cockDeg: 54.891, bowDeg: 14.9789, faceDeg: -30, label: 'P8 follow-through, shaft parallel' },
+  { t: 0.892, thetaDeg: -94, u: 0.1756, v: -0.1666, cockDeg: 69.0622, bowDeg: 42.2114, faceDeg: -31.3, label: 'P9 shoulders 90° to target' },
+  { t: 1, thetaDeg: -120, u: 0.281, v: 0.046, cockDeg: 43.8808, bowDeg: 67.875, faceDeg: -35.1, label: 'P10 finish, shoulders 120°' },
 ];
 
 
