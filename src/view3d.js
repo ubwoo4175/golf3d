@@ -23,7 +23,7 @@ import { BODY, PLANE, SCENE, CLUB, COLORS } from './config.js';
  * hanging on the near side of the shaft.
  */
 const HOSEL = { heel: 0.42, crown: 0.5, neck: 0.55 };
-import { HIP_PIVOT, getRig, getClub, planeToWorld, ballPosition } from './rig.js';
+import { HIP_PIVOT, NO_SHIFT, getRig, getClub, planeToWorld, ballPosition } from './rig.js';
 import { PHASES } from './swing.js';
 import * as V from './vec3.js';
 
@@ -174,6 +174,7 @@ export class SceneView {
     // flip is a rebuild of one group rather than of the whole scene.
     this.staticGroup = new THREE.Group();
     this.scene.add(this.staticGroup);
+    this.buildLowerBody();
     this.buildStatic();
     this.buildBody();
     this.buildPaths();
@@ -235,14 +236,14 @@ export class SceneView {
   }
 
   /**
-   * Ground, ball, target line, legs and the spine axis. Everything here is
+   * Ground, ball, target line and the address spine axis. Everything here is
    * static during a swing but depends on the rig -- mirrored by handedness, and
    * the axis re-aimed by spine tilt -- so it goes in `staticGroup` and is rebuilt
    * by `rebuildRig`.
    */
   buildStatic() {
     const group = this.staticGroup;
-    const { H, spineAxis } = getRig();
+    const { spineAxis } = getRig();
     group.add(new THREE.GridHelper(6, 24, '#22303f', '#161f2b'));
 
     // The ball sits on the chest-normal side, forward in the stance (lead side).
@@ -269,40 +270,88 @@ export class SceneView {
       ),
     );
 
-    const op = SCENE.bodyOpacity;
-    const half = BODY.pelvisWidth / 2;
-    for (const s of [1, -1]) {
-      const hip = V.vec(HIP_PIVOT.x + s * half, HIP_PIVOT.y, HIP_PIVOT.z);
-      const knee = V.vec(
-        (s * (half + BODY.footSpread / 2)) / 2,
-        BODY.kneeHeight,
-        H * BODY.kneeForward,
-      );
-      const foot = V.vec((s * BODY.footSpread) / 2, 0.03, H * -0.02);
-      new Segment(group, 0.04, '#5c6a7d', op).aim(hip, knee);
-      new Segment(group, 0.035, '#5c6a7d', op).aim(knee, foot);
-      joint(group, 0.045, '#5c6a7d', op).position.copy(v3(hip));
-      joint(group, 0.04, '#5c6a7d', op).position.copy(v3(knee));
-    }
-    new Segment(group, 0.045, '#5c6a7d', op).aim(
-      V.vec(HIP_PIVOT.x + half, HIP_PIVOT.y, HIP_PIVOT.z),
-      V.vec(HIP_PIVOT.x - half, HIP_PIVOT.y, HIP_PIVOT.z),
-    );
-
-    // Spine axis: the fixed rotation axis, drawn well past the head.
+    // The address spine axis, faint, so the transition lean shows against it.
+    // The live axis is drawn per frame in `draw`.
     const axisEnd = V.addScaled(HIP_PIVOT, spineAxis.dir, BODY.torsoLength + 0.55);
     const axisStart = V.addScaled(HIP_PIVOT, spineAxis.dir, -0.25);
     group.add(
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([v3(axisStart), v3(axisEnd)]),
-        new THREE.LineDashedMaterial({ color: '#4d5f75', dashSize: 0.05, gapSize: 0.04 }),
+        new THREE.LineDashedMaterial({
+          color: '#4d5f75',
+          dashSize: 0.02,
+          gapSize: 0.05,
+          transparent: true,
+          opacity: 0.45,
+        }),
       ).computeLineDistances(),
     );
+    this.lowerBody(NO_SHIFT, HIP_PIVOT);
+  }
+
+  /**
+   * Pelvis and legs. The feet stay planted; the pelvis follows the transition
+   * shift -- slid toward the target with the hip pivot, turned open (the lead
+   * hip back, away from the ball) and tipped lead-side up -- and each knee
+   * takes half of its hip's move, which is how a lead knee drifts toward the
+   * target in the bump. Drawn only: the pelvis is not in the kinematic chain.
+   */
+  lowerBody(shift, pivot) {
+    const H = getRig().H;
+    const half = BODY.pelvisWidth / 2;
+    const open = V.rad(shift.hipOpenDeg);
+    const rise = V.rad(shift.hipRiseDeg);
+    // Trail hip -> lead hip: +X at address; opening swings the lead end back
+    // (away from the ball, which is on the +H z side) and tipping lifts it.
+    const across = V.vec(
+      Math.cos(open) * Math.cos(rise),
+      Math.sin(rise),
+      -H * Math.sin(open) * Math.cos(rise),
+    );
+    const legs = this.legs;
+    for (const s of [1, -1]) {
+      const hip = V.addScaled(pivot, across, s * half);
+      const hipRest = V.vec(HIP_PIVOT.x + s * half, HIP_PIVOT.y, HIP_PIVOT.z);
+      const kneeRest = V.vec(
+        (s * (half + BODY.footSpread / 2)) / 2,
+        BODY.kneeHeight,
+        H * BODY.kneeForward,
+      );
+      const knee = V.addScaled(kneeRest, V.sub(hip, hipRest), 0.5);
+      const foot = V.vec((s * BODY.footSpread) / 2, 0.03, H * -0.02);
+      const leg = legs[s];
+      leg.thigh.aim(hip, knee);
+      leg.shin.aim(knee, foot);
+      leg.hip.position.copy(v3(hip));
+      leg.knee.position.copy(v3(knee));
+    }
+    this.pelvis.aim(V.addScaled(pivot, across, half), V.addScaled(pivot, across, -half));
+  }
+
+  buildLowerBody() {
+    const op = SCENE.bodyOpacity;
+    const grey = '#5c6a7d';
+    this.legs = {};
+    for (const s of [1, -1]) {
+      this.legs[s] = {
+        thigh: new Segment(this.scene, 0.04, grey, op),
+        shin: new Segment(this.scene, 0.035, grey, op),
+        hip: joint(this.scene, 0.045, grey, op),
+        knee: joint(this.scene, 0.04, grey, op),
+      };
+    }
+    this.pelvis = new Segment(this.scene, 0.045, grey, op);
   }
 
   buildBody() {
     const op = SCENE.bodyOpacity;
     this.torso = new Segment(this.scene, 0.06, COLORS.body, op);
+    // The live spine axis: moves only in the transition.
+    this.axisLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineDashedMaterial({ color: '#6f86a3', dashSize: 0.05, gapSize: 0.04 }),
+    );
+    this.scene.add(this.axisLine);
     this.torso.aim(HIP_PIVOT, getRig().shoulderCenter);
     this.shoulderLine = new Segment(this.scene, 0.045, COLORS.body, op);
     this.neck = new Segment(this.scene, 0.03, COLORS.body, op);
@@ -471,6 +520,15 @@ export class SceneView {
     const { showPath, showPlane, showLocalPath, showClub, showHeadPath } = this.store.state;
     const { basis, lead, trail } = pose;
 
+    this.torso.aim(pose.hipPivot, pose.shoulderCenter);
+    this.lowerBody(pose.shift, pose.hipPivot);
+    const axis = this.axisLine.geometry.attributes.position;
+    const a0 = V.addScaled(pose.hipPivot, basis.up, -0.25);
+    const a1 = V.addScaled(pose.hipPivot, basis.up, BODY.torsoLength + 0.55);
+    axis.setXYZ(0, a0.x, a0.y, a0.z);
+    axis.setXYZ(1, a1.x, a1.y, a1.z);
+    axis.needsUpdate = true;
+    this.axisLine.computeLineDistances();
     this.shoulderLine.aim(pose.trailShoulder, pose.leadShoulder);
     this.neck.aim(pose.shoulderCenter, pose.head);
     this.head.position.copy(v3(pose.head));

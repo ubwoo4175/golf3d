@@ -6,7 +6,8 @@
  * and `club.js` where the shaft points -- and assembles the result. Everything it
  * returns is world space, ready for a renderer.
  *
- *   theta            -> rig.torsoBasis         the one body DOF
+ *   theta, shift     -> rig.torsoBasis         the one body DOF, on an axis that
+ *                                             moves only in the transition
  *   (u, v, blend)    -> arm.solveAxisDistance  the hand, via the arm rules
  *   shoulders + hand -> arm.solveArm           the elbows
  *   hand + wrist     -> club.solveClub         the shaft and the face
@@ -20,6 +21,7 @@ import {
   shoulderWorld,
   planeToWorld,
   getPlaneOffset,
+  NO_SHIFT,
 } from './rig.js';
 import { solveAxisDistance, solveArm, elbowHint } from './arm.js';
 import { solveClub, wristForDirection, WRIST_ZERO } from './club.js';
@@ -75,6 +77,8 @@ export function handFrame(hand, leadElbow, trailElbow, basis) {
  * @param {'lead'|'trail'} d.constraint  which arm is held straight
  * @param {number} d.blend       0 = lead arm locked, 1 = trail arm locked
  * @param {object} d.wrist       { cockDeg, bowDeg, faceDeg }
+ * @param {object} [d.shift]     the transition shift of the spine axis at this
+ *   moment, from `rig.shiftAt(t)`. Omitted = the address axis.
  * @param {object} [d.aim]       the shaft direction as a WORLD unit vector.
  *   When present it overrides the wrist's cock/bow: the direction is converted
  *   to wrist angles against this pose's own hand frame. This is how the
@@ -91,8 +95,9 @@ export function solvePose({
   wrist = WRIST_ZERO,
   aim,
   ratio,
+  shift,
 }) {
-  const basis = torsoBasis(theta);
+  const basis = torsoBasis(theta, shift);
   const solved = solveAxisDistance(u, v, blend, ratio);
 
   const hand = planeToWorld(basis, u, v, solved.distance);
@@ -124,7 +129,9 @@ export function solvePose({
     basis,
     handedness: getRig().handedness,
     sides: getRig().sides,
-    shoulderCenter: getRig().shoulderCenter,
+    shoulderCenter: basis.shoulder,
+    hipPivot: basis.pivot,
+    shift: shift ?? NO_SHIFT,
     leadShoulder,
     trailShoulder,
     hand,
@@ -132,7 +139,7 @@ export function solvePose({
     lead,
     trail,
     elbowLineDir: V.normalize(V.sub(trail.elbow, lead.elbow)),
-    head: V.addScaled(getRig().shoulderCenter, basis.up, BODY.neckLength + BODY.headRadius),
+    head: V.addScaled(basis.shoulder, basis.up, BODY.neckLength + BODY.headRadius),
     handFrame: frame,
     wrist,
     club: solveClub(frame, wrist),

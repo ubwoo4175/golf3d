@@ -70,6 +70,35 @@
           </div>
           <div class="tool-group">
             <div class="tool-head">
+              transition
+              <span>
+                <button id="shift-on" class="mini" aria-pressed="true" title="Spine axis leans and the hips shift around the top; fixed before and after">on</button>
+                <button id="reset-shift" class="mini" title="Back to the default transition">reset</button>
+              </span>
+            </div>
+            <label class="mini-slider" title="Extra lean of the spine axis away from the target, pivoting at the hips">
+              <span>lean</span>
+              <input id="shift-tilt" type="range" min="0" max="20" step="0.5" />
+              <output id="shift-tilt-out"></output>
+            </label>
+            <label class="mini-slider" title="Hips (the base of the spine axis) sliding toward the target">
+              <span>hip slide</span>
+              <input id="shift-slide" type="range" min="-5" max="15" step="0.5" />
+              <output id="shift-slide-out"></output>
+            </label>
+            <label class="mini-slider" title="When the shift starts: this long before the top (P4)">
+              <span>starts</span>
+              <input id="shift-start" type="range" min="0" max="250" step="5" />
+              <output id="shift-start-out"></output>
+            </label>
+            <label class="mini-slider" title="When the shift is complete: this long after the top (P4). Fixed from here on.">
+              <span>ends</span>
+              <input id="shift-end" type="range" min="10" max="300" step="5" />
+              <output id="shift-end-out"></output>
+            </label>
+          </div>
+          <div class="tool-group">
+            <div class="tool-head">
               ball
               <button id="reset-ball" class="mini" title="Back to this club's standard ball position">reset</button>
             </div>

@@ -7,10 +7,19 @@
  * the new shape on the next frame.
  */
 
-import { TIMING, REACH, CLUBS, SCENE, clubReach } from './config.js';
+import { TIMING, REACH, CLUBS, SCENE, TRANSITION, clubReach } from './config.js';
 import { SwingPath, phaseAt, RELEASE_T } from './swing.js';
 import { CONSTRAINTS, applyConstraints, faceCentre } from './constraints.js';
-import { setHandedness, setClub, getClub, setPlaneOffset, getRig, ballPosition } from './rig.js';
+import {
+  setHandedness,
+  setClub,
+  getClub,
+  setPlaneOffset,
+  getRig,
+  ballPosition,
+  getTransition,
+  setTransition,
+} from './rig.js';
 import { setClubLength, setClubLie, faceAngleToTarget } from './club.js';
 import { distance } from './vec3.js';
 import { Store } from './state.js';
@@ -30,7 +39,7 @@ const BALL_FIELDS = ['ballHeight', 'ballForward', 'ballLateral'];
 const BALL_DEFAULTS = Object.fromEntries(
   CLUBS.map((c) => [c.id, Object.fromEntries(BALL_FIELDS.map((f) => [f, c[f]]))]),
 );
-const settings = { balls: {}, constraints: {}, held: {} };
+const settings = { balls: {}, constraints: {}, held: {}, transition: {} };
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}'));
 } catch {
@@ -41,6 +50,10 @@ for (const club of CLUBS) {
   for (const f of BALL_FIELDS) {
     if (typeof saved?.[f] === 'number' && Number.isFinite(saved[f])) club[f] = saved[f];
   }
+}
+// Only the fields TRANSITION defines, and only values of the same type.
+for (const [k, value] of Object.entries(settings.transition ?? {})) {
+  if (typeof value === typeof TRANSITION[k]) setTransition({ [k]: value });
 }
 const saveSettings = () => {
   try {
@@ -187,12 +200,24 @@ scrub.addEventListener('input', () =>
 // A tick per keyframe on the scrubber. A click -- not a drag -- that lands
 // within a few pixels of one goes exactly to that keyframe.
 const ticks = $('scrub-ticks');
+// The transition window, shaded behind the ticks.
+const band = document.createElement('i');
+band.className = 'scrub-band';
+band.title = 'transition: spine lean and hip shift';
+function placeBand() {
+  const { enabled, startT, endT } = getTransition();
+  band.style.display = enabled ? '' : 'none';
+  band.style.left = `${startT * 100}%`;
+  band.style.width = `${Math.max(0, endT - startT) * 100}%`;
+}
+placeBand();
 let tickTimes = '';
 function buildTicks() {
   const times = swing.keys.map((k) => k.t).join();
   if (times === tickTimes) return;
   tickTimes = times;
   ticks.replaceChildren(
+    band,
     ...swing.keys.map((k) => {
       const tag = k.label.split(' ')[0];
       const tick = document.createElement('i');
@@ -320,6 +345,61 @@ $('reset-ball').addEventListener('click', () => {
 });
 showBall();
 
+// --- the transition shift --------------------------------------------------
+//
+// The spine axis leans away from the target and the hips slide toward it, in
+// one window around the top only; see TRANSITION in config.js. The window is
+// set in milliseconds either side of the top, which is how it is felt.
+
+const topT = () => swing.keys.find((k) => k.label.startsWith('P4 ')).t;
+const MS = TIMING.swingSeconds * 1000;
+const shift = {
+  tilt: { input: $('shift-tilt'), out: $('shift-tilt-out'),
+    get: (s) => s.tiltDeg,
+    set: (x) => ({ tiltDeg: x }),
+    text: (x) => `${x.toFixed(1)}°` },
+  slide: { input: $('shift-slide'), out: $('shift-slide-out'),
+    get: (s) => s.slide * 100,
+    set: (x) => ({ slide: x / 100 }),
+    text: (x) => `${x.toFixed(1)} cm` },
+  start: { input: $('shift-start'), out: $('shift-start-out'),
+    get: (s) => (topT() - s.startT) * MS,
+    set: (x) => ({ startT: topT() - x / MS }),
+    text: (x) => `${x.toFixed(0)} ms ←` },
+  end: { input: $('shift-end'), out: $('shift-end-out'),
+    get: (s) => (s.endT - topT()) * MS,
+    set: (x) => ({ endT: topT() + x / MS }),
+    text: (x) => `→ ${x.toFixed(0)} ms` },
+};
+
+function showShift() {
+  const s = getTransition();
+  for (const c of Object.values(shift)) {
+    const x = c.get(s);
+    c.input.value = String(x);
+    c.out.textContent = c.text(x);
+    c.input.disabled = !s.enabled;
+  }
+  $('shift-on').setAttribute('aria-pressed', String(s.enabled));
+  $('shift-on').textContent = s.enabled ? 'on' : 'off';
+  placeBand();
+}
+
+function changeShift(patch) {
+  setTransition(patch);
+  settings.transition = { ...getTransition() };
+  saveSettings();
+  showShift();
+  swing.emit(); // every pose from the window on has moved
+}
+
+for (const c of Object.values(shift)) {
+  c.input.addEventListener('input', () => changeShift(c.set(Number(c.input.value))));
+}
+$('shift-on').addEventListener('click', () => changeShift({ enabled: !getTransition().enabled }));
+$('reset-shift').addEventListener('click', () => changeShift({ ...TRANSITION }));
+showShift();
+
 $('prev-key').addEventListener('click', () => store.stepKeyframe(-1));
 $('next-key').addEventListener('click', () => store.stepKeyframe(1));
 $('reset-path').addEventListener('click', () =>
@@ -402,7 +482,7 @@ $('load-swing').addEventListener('click', () => {
 });
 
 // For the console: `golf.swing.snapshot()` is the same JSON "Copy swing" gives.
-window.golf = { swing, store };
+window.golf = { swing, store, sceneView };
 
 /**
  * Flip handedness. The keyframes are untouched -- u is always measured toward
@@ -480,7 +560,9 @@ function updateReadouts(pose) {
 
   readouts.phase.textContent = phaseAt(t).label;
   readouts.time.textContent = `${(t * TIMING.swingSeconds).toFixed(2)}s · t ${t.toFixed(3)}`;
-  readouts.torso.textContent = `${turn > 0 ? '+' : ''}${turn.toFixed(0)}°`;
+  // The transition lean rides along once it has started.
+  const lean = pose.shift.w > 0 ? ` · lean +${pose.shift.tiltDeg.toFixed(1)}°` : '';
+  readouts.torso.textContent = `${turn > 0 ? '+' : ''}${turn.toFixed(0)}°${lean}`;
   readouts.hand.textContent = `u ${(pose.u * 100).toFixed(1)} v ${(pose.v * 100).toFixed(1)}`;
 
   const off = pose.normalOffset * 100;
@@ -523,7 +605,7 @@ store.subscribe((state) => {
   playButton.textContent = state.playing ? '❚❚ Pause' : '▶ Play';
   if (document.activeElement !== scrub) scrub.value = String(Math.round(state.t * 1000));
   swing.keys.forEach((k, i) =>
-    ticks.children[i]?.classList.toggle('on', Math.abs(k.t - state.t) < 1e-3),
+    ticks.children[i + 1]?.classList.toggle('on', Math.abs(k.t - state.t) < 1e-3),
   );
   const sides = getRig().sides;
   handButton.textContent = `${state.handedness === 'right' ? 'Right' : 'Left'}-handed`;

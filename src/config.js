@@ -68,6 +68,42 @@ export const BODY = {
   headRadius: 0.114,
 };
 
+/**
+ * The transition shift: the one place the spine axis itself moves.
+ *
+ * Rory plants the lead foot just BEFORE the club reaches the top. The lead hip
+ * then goes back and up, the pelvis bumps toward the target, and the spine --
+ * pivoting at the hips -- tips further away from the target, so the head stays
+ * behind the ball while the pelvis runs out ahead of it.
+ *
+ * Freeing the axis for the whole swing would make every other number here
+ * depend on it, so it is frozen everywhere except one window: fixed at the
+ * address values up to `startT`, a smooth (quintic, C2) move to the shifted
+ * values by `endT`, and fixed there for the rest of the downswing and the
+ * follow-through. The top is P4, t = 0.6075, so the defaults start 60 ms before
+ * the top and finish 110 ms after it, before P5.
+ *
+ *   tiltDeg     extra lean of the spine axis away from the target, on top of
+ *               BODY.spineTiltLateralDeg, pivoting at the hip pivot
+ *   slide       the hip pivot's move toward the target, metres
+ *   hipOpenDeg  the pelvis turning open -- the lead hip going back   } drawn
+ *   hipRiseDeg  the pelvis tipping lead-side up -- the lead hip up   } only
+ *
+ * The arms, hands and club ride on the torso frame, so they tilt and slide
+ * with it: the 2D panels do not change, the world does. The pelvis turn and
+ * tip are drawn, not solved: the model's torso has one rotation, and the
+ * pelvis is not in the chain.
+ */
+export const TRANSITION = {
+  enabled: true,
+  startT: 0.5589,
+  endT: 0.6966,
+  tiltDeg: 8,
+  slide: 0.08,
+  hipOpenDeg: 20,
+  hipRiseDeg: 5,
+};
+
 export const REACH = BODY.upperArm + BODY.forearm;
 
 /**

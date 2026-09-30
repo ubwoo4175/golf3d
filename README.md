@@ -151,6 +151,45 @@ acromion-to-glenohumeral inset, not the breadth itself.
 The authored hand path was rescaled by the reach ratio (0.9567) so its shape
 carries over unchanged onto the smaller frame.
 
+### The transition: the one time the spine axis moves
+
+Rory plants the lead foot just before the club reaches the top; the lead hip
+then goes back and up, the pelvis bumps toward the target, and the spine --
+pivoting at the hips -- tips further away from the target, so the head stays
+behind the ball while the pelvis runs ahead of it.
+
+Letting the axis move for the whole swing would make every other number depend
+on it, so it moves in **one window only** (`TRANSITION` in `config.js`):
+
+| | t | Spine axis |
+| --- | --- | --- |
+| Address → just before the top | 0 → 0.559 (60 ms before P4) | fixed at the address lean |
+| Transition | 0.559 → 0.697 (110 ms after P4, before P5) | moves, quintic smootherstep |
+| Downswing and follow-through | 0.697 → 1 | fixed at the shifted values |
+
+The smootherstep has zero velocity *and* zero acceleration at both ends, so the
+axis starts and stops without a jolt in the hand or clubhead path. The defaults
+lean the axis a further **8°** away from the target (16° in all, on top of the
+8° address lean) and slide the hip pivot **8 cm** toward the target. The pelvis
+is drawn turning 20° open and tipping 5° lead-side up; that part is drawn only,
+since the pelvis is not in the kinematic chain.
+
+The arms, hands and club are placed in the torso frame, so they lean and slide
+with it: **the two 2D panels do not change, the 3D world does.** With the
+shipped keyframes that swings the whole downswing forward -- at impact the
+clubhead is about 18 cm further toward the target than without the shift --
+8 cm from the slide, 10 cm from the lean tilting the hands and club about the
+hips -- and 31 cm from the ball instead of 17. So the downswing keyframes (P5-P7) need re-tuning with the shift on,
+or turn on the P7 constraint, which puts the head back on the ball.
+
+The measured effect on the path: the clubhead still turns round once, at
+t = 0.626 (0.625 without the shift), and the sharpest step in its direction at
+the top drops from 6.1° to 4.7°. Right- and left-handed stay exact mirrors.
+
+Tune it top left of the 3D pane: *lean*, *hip slide*, and when it *starts*
+and *ends*, in milliseconds either side of the top. The window is underlined
+in orange on the swing scrubber.
+
 ### Picking a club
 
 The **club** slider replaces the old spine-tilt slider. Six detents, defaulting to
@@ -509,6 +548,7 @@ golfer standing still. The angle is always interpolated as a curve.
 | Reset swing | Back to the defaults, and forgets the saved swing. |
 | Ball: tee / from feet / stance | Top left of the 3D pane, per club: tee height under the ball, distance out from the line of the feet, and position in the stance (+ toward the lead foot). Moving the ball re-aims the address club at it. *reset* restores the club's standard position. |
 | Constraints: P2 P6 P1 P7 | Top left of the 3D pane. Rules that are re-imposed after every edit; see below. |
+| Transition: lean / hip slide / starts / ends | Top left of the 3D pane. The spine axis's lean and the hips' slide around the top, and the window they happen in; *on* switches it off and back. See *The transition*. |
 
 The timeline is the master clock: `t` sets both the torso angle and the reference
 hand position. Dragging rewrites a keyframe's hand position; it never changes its

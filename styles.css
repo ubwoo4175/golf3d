@@ -517,3 +517,18 @@ button.mini {
   font: 11px ui-monospace, Menlo, monospace;
   color: var(--text);
 }
+
+button.mini[aria-pressed='true'] {
+  background: #17385c;
+  border-color: #4aa3ff;
+}
+
+/* The transition window, underlined beneath the scrubber track. */
+.scrub-band {
+  position: absolute;
+  bottom: -6px;
+  height: 3px;
+  background: #ff9f43;
+  opacity: 0.75;
+  border-radius: 2px;
+}

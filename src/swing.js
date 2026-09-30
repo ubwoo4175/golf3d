@@ -36,7 +36,7 @@ import * as V from './vec3.js';
 import { rad, sub, clamp } from './vec3.js';
 import { TIMING, CURVE, RELEASE_BLEND_T } from './config.js';
 import { naturalAddress, axisDistanceFor } from './arm.js';
-import { ballPosition, torsoBasis } from './rig.js';
+import { ballPosition, torsoBasis, shiftAt } from './rig.js';
 import { wristForDirection } from './club.js';
 import { solvePose } from './pose.js';
 
@@ -484,6 +484,7 @@ export class SwingPath {
         v: k.v,
         constraint: constraintAt(k.t),
         blend: releaseBlendAt(k.t),
+        shift: shiftAt(k.t),
         wrist: k,
       });
       const d = pose.club.shaftDir;
@@ -575,7 +576,8 @@ export class SwingPath {
       a: charts[i].a + (charts[i + 1].a - charts[i].a) * s,
       b: charts[i].b + (charts[i + 1].b - charts[i].b) * s,
     };
-    return chartToWorld(c, torsoBasis(rad(thetaDeg)));
+    const t = this.keys[i].t + (this.keys[i + 1].t - this.keys[i].t) * s;
+    return chartToWorld(c, torsoBasis(rad(thetaDeg), shiftAt(t)));
   }
 
   /** Interpolated torso angle at time t, degrees. Same curve as `sample`. */
@@ -649,6 +651,8 @@ export class SwingPath {
       v: hand('v'),
       constraint: constraintAt(clamped),
       blend: releaseBlendAt(clamped),
+      /** Where the spine axis is: moved only in the transition window. */
+      shift: shiftAt(clamped),
       /** World shaft direction; `solvePose` turns it back into wrist angles. */
       aim: aimStraight[i]
         ? this.straightAim(i, localT, thetaDeg)

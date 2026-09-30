@@ -11,7 +11,7 @@
  */
 
 import * as V from './vec3.js';
-import { BODY, PLANE, CLUBS, DEFAULT_CLUB, DEFAULT_HANDEDNESS } from './config.js';
+import { BODY, PLANE, CLUBS, DEFAULT_CLUB, DEFAULT_HANDEDNESS, TRANSITION } from './config.js';
 
 /** Sign convention: theta > 0 is the backswing (torso turns away from target). */
 export const BACKSWING_SIGN = 1;
@@ -84,6 +84,8 @@ export function setHandedness(handedness) {
   rig = {
     handedness,
     H,
+    forward,
+    lateral,
     sides: ROLE_SIDES[handedness] ?? ROLE_SIDES.right,
     rest: { up, side, fwd: chestNormal(side, up, H) },
     spineAxis: { base: HIP_PIVOT, dir: up },
@@ -122,23 +124,86 @@ export const ballPosition = () =>
 // the rig on the placeholder in BODY.
 setSpineTilt(club.spineTiltDeg);
 
+// --- the transition shift ----------------------------------------------------
+//
+// The spine axis is fixed except in one window around the top; see TRANSITION
+// in config.js. `shiftAt(t)` says how far through that move the body is at
+// time t, and `torsoBasis` takes it and moves the axis accordingly.
+
+let transition = { ...TRANSITION };
+
+export const getTransition = () => transition;
+
+export function setTransition(patch) {
+  transition = { ...transition, ...patch };
+  return transition;
+}
+
+/** No shift at all: the address axis. */
+export const NO_SHIFT = Object.freeze({ w: 0, tiltDeg: 0, slide: 0, hipOpenDeg: 0, hipRiseDeg: 0 });
+
 /**
- * Orthonormal torso basis after rotating `theta` radians about the spine axis.
+ * How far through the transition shift the body is at time t: 0 up to
+ * `startT`, 1 from `endT` on, and a quintic smootherstep between -- zero
+ * velocity AND zero acceleration at both ends, so the axis starts and stops
+ * moving without a jolt in the hand or clubhead path.
+ */
+export function shiftAt(t) {
+  const { enabled, startT, endT } = transition;
+  if (!enabled) return NO_SHIFT;
+  let x = endT > startT ? (t - startT) / (endT - startT) : t >= endT ? 1 : 0;
+  x = Math.min(1, Math.max(0, x));
+  const w = x * x * x * (x * (6 * x - 15) + 10);
+  if (w === 0) return NO_SHIFT;
+  return {
+    w,
+    tiltDeg: w * transition.tiltDeg,
+    slide: w * transition.slide,
+    hipOpenDeg: w * transition.hipOpenDeg,
+    hipRiseDeg: w * transition.hipRiseDeg,
+  };
+}
+
+/**
+ * The un-turned torso frame for a given shift: the spine axis leaned further
+ * away from the target by `tiltDeg`, pivoting about a hip pivot slid `slide`
+ * toward the target. Both are the same for either handedness -- the target is
+ * +X for both -- exactly like the address lean they add to.
+ */
+function restFrame(shift) {
+  if (!shift || (!shift.tiltDeg && !shift.slide)) {
+    return { up: rig.rest.up, side: rig.rest.side, pivot: HIP_PIVOT, shoulder: rig.shoulderCenter };
+  }
+  const lateral = rig.lateral + V.rad(shift.tiltDeg);
+  const tilt = (p) => V.rotateZ(V.rotateX(p, rig.forward), lateral);
+  const up = V.normalize(tilt(V.vec(0, 1, 0)));
+  const side = V.normalize(tilt(V.vec(1, 0, 0)));
+  const pivot = V.vec(HIP_PIVOT.x + shift.slide, HIP_PIVOT.y, HIP_PIVOT.z);
+  return { up, side, pivot, shoulder: V.addScaled(pivot, up, BODY.torsoLength) };
+}
+
+/**
+ * Orthonormal torso basis after rotating `theta` radians about the spine axis,
+ * with the axis itself moved by `shift` (see `shiftAt`; omitted = address).
  *
  * The rotation is by `-H * theta` so that positive theta is always the
  * backswing: it has to carry the lead shoulder toward the ball, and the ball is
  * on opposite sides for the two handednesses.
+ *
+ * The basis carries its own origin -- the hip `pivot` and the `shoulder`
+ * centre -- so everything placed in the torso frame follows the axis when it
+ * moves.
  */
-export function torsoBasis(theta) {
-  const { rest, H } = rig;
-  const up = rest.up;
-  const side = V.normalize(V.rotateAbout(rest.side, up, -H * theta));
-  return { up, side, fwd: chestNormal(side, up, H) };
+export function torsoBasis(theta, shift = NO_SHIFT) {
+  const { H } = rig;
+  const { up, side: rest, pivot, shoulder } = restFrame(shift);
+  const side = V.normalize(V.rotateAbout(rest, up, -H * theta));
+  return { up, side, fwd: chestNormal(side, up, H), pivot, shoulder };
 }
 
 /** World position of a shoulder in the given torso basis. */
 export const shoulderWorld = (basis, which) =>
-  V.addScaled(rig.shoulderCenter, basis.side, SHOULDER_UV[which].u);
+  V.addScaled(basis.shoulder, basis.side, SHOULDER_UV[which].u);
 
 /**
  * Where the reference rectangle sits, measured from the spine axis.
@@ -161,14 +226,14 @@ export const getPlaneOffset = () => planeOffset;
  * the spine axis. Omitting `distance` puts it on the reference rectangle itself.
  */
 export function planeToWorld(basis, u, v, distance = planeOffset) {
-  let p = V.addScaled(rig.shoulderCenter, basis.fwd, distance);
+  let p = V.addScaled(basis.shoulder, basis.fwd, distance);
   p = V.addScaled(p, basis.side, u);
   return V.addScaled(p, basis.up, v);
 }
 
 /** Inverse of `planeToWorld`: project a world point into plane coordinates. */
 export function worldToPlane(basis, p) {
-  const d = V.sub(p, rig.shoulderCenter);
+  const d = V.sub(p, basis.shoulder);
   return {
     u: V.dot(d, basis.side),
     v: V.dot(d, basis.up),

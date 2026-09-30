@@ -23,7 +23,7 @@
 
 import * as V from './vec3.js';
 import { SCENE } from './config.js';
-import { getRig, getClub, ballPosition } from './rig.js';
+import { getRig, getClub, ballPosition, shiftAt, getTransition } from './rig.js';
 import { freeArmULimit } from './arm.js';
 import { wristForDirection, solveClub, faceAngleToTarget, getClubLength } from './club.js';
 import { solvePose } from './pose.js';
@@ -52,6 +52,7 @@ export function keyPose(k, override = {}) {
     v: key.v,
     constraint: constraintAt(key.t),
     blend: releaseBlendAt(key.t),
+    shift: shiftAt(key.t),
     wrist: key,
   });
 }
@@ -357,7 +358,7 @@ export function applyConstraints(keys, active) {
   const before = keys.map(fields);
   const k1 = () => keys[indexOf(keys, 'P1')];
   const k7 = () => keys[indexOf(keys, 'P7')];
-  const world = () => [ballPosition(), getClubLength(), getRig().H, getClub().id];
+  const world = () => [ballPosition(), getClubLength(), getRig().H, getClub().id, getTransition()];
   const status = {};
   if (active.p1) status.p1 = once('p1', () => [fields(k1()), world()], () => applyP1(keys));
   if (active.p7) {
